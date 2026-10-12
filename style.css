@@ -37,3 +37,7 @@
 .session-steps li.run{color:#17684d;font-weight:600}
 .session-steps li.walk{color:#536c73}
 #enginePlan .session-card{margin-bottom:14px}
+
+.session-match{border-top:1px solid #dce6e1;padding:12px 0;line-height:1.7}
+.session-match button{display:block;margin-top:6px}
+#matchActivityChoices select{width:100%}

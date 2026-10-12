@@ -5,6 +5,7 @@ let data;
 try{data=JSON.parse(localStorage.getItem(KEY))||defaultData()}catch(e){data=defaultData()}
 const $=id=>document.getElementById(id);
 if(!Array.isArray(data.deletedStravaIds))data.deletedStravaIds=[];if(!Array.isArray(data.weights))data.weights=[];if(!('weightGoal' in data))data.weightGoal=null;if(!data.recent5kBenchmark)data.recent5kBenchmark='27:00';if(!data.adaptive||typeof data.adaptive!=='object')data.adaptive={level:0,proposal:null,lastReview:'',acceptedAt:''};if(!Array.isArray(data.adaptive.sessions)||data.adaptive.sessions.length!==3)data.adaptive.sessions=[12,12,14];
+if(!Array.isArray(data.sessionMatches))data.sessionMatches=[];
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data));
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const weeks=[
@@ -104,7 +105,83 @@ function sessionMarkup(day,minutes){
  const total=steps.reduce((a,x)=>a+x.min,0);
  return `<div class="session-card"><div class="session-card-title"><strong>${escapeHTML(day)} · ${minutes} min running</strong><span>${total} min total</span></div><p class="session-summary">5 min warm-up + ${minutes} min running + ${walk-10} min recovery walks + 5 min cool-down</p><ol class="session-steps">${steps.map(x=>`<li class="${x.kind}"><span>${escapeHTML(x.label)}</span><strong>${x.min} min</strong></li>`).join('')}</ol><p class="hint">Walking is extra to the prescribed running time. Stop if pain worsens or your gait changes.</p></div>`;
 }
-function render(){let w=weekIndex();$('weekNumber').textContent=`${w+1} / 12`;$('runCount').textContent=data.runs.filter(r=>r.date>=data.start).length;$('totalKm').textContent=(data.runs.filter(r=>r.date>=data.start).reduce((a,r)=>a+r.distance,0)).toFixed(1)+' km';$('nextTitle').textContent='Easy run / walk · '+data.adaptive.sessions[0]+' min running';$('nextDescription').textContent='Follow each run/walk step below. Walking time is in addition to running time. Keep running easy and conversational.';$('nextSessionSteps').innerHTML=sessionMarkup('Monday',data.adaptive.sessions[0]);$('nextDay').textContent=data.weekend==='Saturday'?'Mon · Thu · Sat':'Mon · Thu · Sun';$('advice').textContent=advice();$('advice').className='notice'+(/REDUCE|HOLD/.test(advice())?' warn':'');$('livePlanRows').innerHTML=['Monday','Thursday',data.weekend].map((day,i)=>sessionMarkup(day,data.adaptive.sessions[i])).join('');$('planRows').innerHTML=weeks.map((r,i)=>`<div class="week ${i===data.adaptive.level?'current':''}"><strong>Week ${i+1} · ${r[0]}</strong><p>${r[1]}</p><small>Longest session: ${r[2]}</small></div>`).join('');$('longest').textContent=(Math.max(0,...data.runs.filter(r=>r.date>=data.start).map(r=>r.runningMinutes||0))).toFixed(0)+' min';$('pace').textContent=data.runs.filter(r=>r.date>=data.start).length?fmtPace(data.runs.filter(r=>r.date>=data.start).slice(-1)[0]):'—';let recent=data.runs.filter(r=>r.date>=data.start).slice(-12),max=Math.max(1,...recent.map(r=>r.distance));$('bars').innerHTML=recent.length?recent.map(r=>`<div class="barwrap"><div>${r.distance.toFixed(1)}</div><div class="bar" style="height:${Math.max(4,Math.round(r.distance/max*110))}px"></div><div>${ukDate(r.date).slice(0,5)}</div></div>`).join(''):'<p class="muted">Log your first run to see your progress.</p>';const filteredHistory=data.runs.filter(r=>$('historyFilter').value==='all'||($('historyFilter').value==='historical'?r.date<'2026-05-01':r.date>=data.start));$('history').innerHTML=filteredHistory.length?[...filteredHistory].reverse().map(r=>`<div class="historyitem"><strong>${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}</strong><span>${fmtPace(r)} · Effort ${r.effort}/10 · Pain ${r.pain==null?'not entered':r.pain+'/10'} · Morning ${r.morning==null?'pending':r.morning+'/10'}</span><div>${escapeHTML(r.notes||'')}</div><div class="activity-actions"><button type="button" class="tiny" data-edit-run="${escapeHTML(String(r.id))}">Edit activity</button><button type="button" class="tiny danger-button" data-delete-run="${escapeHTML(String(r.id))}">Delete</button></div></div>`).join(''):'<p class="muted">No runs recorded yet.</p>';$('startDate').value=data.start;$('weekend').value=data.weekend;$('weightGoal').value=data.weightGoal??'';$('recent5kSetting').value=data.recent5kBenchmark;renderWeights();renderCoachingDashboard();renderAdaptive();}
+
+// Planned-session matching uses calendar-week keys so past matches survive plan changes.
+function mondayOf(date){
+ const dt=new Date(date+'T12:00:00');
+ if(Number.isNaN(dt.getTime()))return date;
+ dt.setDate(dt.getDate()-((dt.getDay()+6)%7));
+ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function dateShift(date,days){
+ const d=new Date(date+'T12:00:00');d.setDate(d.getDate()+days);
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function slotDate(week,slot){return dateShift(week,[0,3,data.weekend==='Saturday'?5:6][slot]);}
+function matchForRun(id){return data.sessionMatches.find(m=>String(m.runId)===String(id));}
+function matchForSlot(week,slot){return data.sessionMatches.find(m=>m.week===week&&m.slot===slot);}
+function runById(id){return data.runs.find(r=>String(r.id)===String(id));}
+function matchLabel(m){return m?`${['Monday','Thursday',data.weekend][m.slot]} ${ukDate(slotDate(m.week,m.slot))}`:'';}
+function plannedSlotMarkup(slot,week){
+ const date=slotDate(week,slot),m=matchForSlot(week,slot),r=m&&runById(m.runId);
+ return `<div class="session-match"><strong>${['Monday','Thursday',data.weekend][slot]} · ${ukDate(date)}</strong> · ${r?'Completed — '+r.distance.toFixed(2)+' km / '+minutesToHms(r.duration):'Not yet matched'} <button class="tiny" type="button" data-match-slot="${slot}" data-match-week="${week}">${r?'Change match':'Match Strava activity'}</button></div>`;
+}
+function matchPanelMarkup(r){
+ const existing=matchForRun(r.id),week=mondayOf(r.date);
+ const choices=[];
+ for(const wk of [dateShift(week,-7),week,dateShift(week,7)]){
+  for(let slot=0;slot<3;slot++){
+   const target=slotDate(wk,slot),gap=Math.abs((new Date(target+'T12:00:00')-new Date(r.date+'T12:00:00'))/86400000);
+   if(gap>3 && (!existing||existing.week!==wk||existing.slot!==slot))continue;
+   const taken=matchForSlot(wk,slot);
+   if(taken&&String(taken.runId)!==String(r.id))continue;
+   choices.push({wk,slot,target,gap});
+  }
+ }
+ choices.sort((a,b)=>a.gap-b.gap||a.slot-b.slot);
+ return `<label>Planned session<select id="matchChoice"><option value="">Unplanned / no match</option>${choices.map(x=>`<option value="${x.wk}|${x.slot}" ${existing&&existing.week===x.wk&&existing.slot===x.slot?'selected':''}>${['Monday','Thursday',data.weekend][x.slot]} ${ukDate(x.target)}${x.gap<=1?' · suggested':''}</option>`).join('')}</select></label><p class="hint">Dates within one day are suggested. Matching never changes the Strava activity. Confirm running minutes separately; moving time can include walking.</p>`;
+}
+let pendingMatchRun=null;
+function openMatchEditor(id){
+ const r=runById(id);if(!r)return;
+ pendingMatchRun=String(r.id);
+ $('matchActivityDescription').textContent=`${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}${r.stravaId?' · Strava':' · Manual'}`;
+ $('matchActivityChoices').innerHTML=matchPanelMarkup(r);
+ $('matchActivityModal').classList.remove('hidden');
+}
+function closeMatchEditor(){pendingMatchRun=null;$('matchActivityModal').classList.add('hidden');}
+$('cancelMatchActivity').addEventListener('click',closeMatchEditor);
+$('matchActivityModal').addEventListener('click',e=>{if(e.target===$('matchActivityModal'))closeMatchEditor();});
+$('confirmMatchActivity').addEventListener('click',()=>{
+ if(pendingMatchRun===null)return;
+ const value=$('matchChoice').value;
+ data.sessionMatches=data.sessionMatches.filter(m=>String(m.runId)!==pendingMatchRun);
+ if(value){
+  const [week,rawSlot]=value.split('|'),slot=Number(rawSlot);
+  if(matchForSlot(week,slot)){alert('This planned session is already matched to another activity. Unmatch that activity first.');return;}
+  data.sessionMatches.push({runId:pendingMatchRun,week,slot});
+ }
+ save();closeMatchEditor();render();
+});
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-match-run],[data-match-slot]');
+ if(!b)return;
+ if(b.dataset.matchRun){openMatchEditor(b.dataset.matchRun);return;}
+ const week=b.dataset.matchWeek,slot=Number(b.dataset.matchSlot);
+ const m=matchForSlot(week,slot);
+ if(m){openMatchEditor(m.runId);return;}
+ const target=slotDate(week,slot);
+ const candidates=data.runs.filter(r=>Math.abs((new Date(r.date+'T12:00:00')-new Date(target+'T12:00:00'))/86400000)<=3&&!matchForRun(r.id));
+ if(!candidates.length){alert('No unmatched activities within three days of this planned session. Sync Strava or log the run first.');return;}
+ candidates.sort((a,b)=>Math.abs(new Date(a.date)-new Date(target))-Math.abs(new Date(b.date)-new Date(target)));
+ openMatchEditor(candidates[0].id);
+ const choice=$('matchChoice');if(choice&&[...choice.options].some(o=>o.value===week+'|'+slot))choice.value=week+'|'+slot;
+});
+function renderMatchSummary(){
+ const wk=mondayOf(today());
+ $('plannedMatches').innerHTML='<h3>Planned runs this week</h3>'+[0,1,2].map(i=>plannedSlotMarkup(i,wk)).join('');
+}
+function render(){let w=weekIndex();$('weekNumber').textContent=`${w+1} / 12`;$('runCount').textContent=data.runs.filter(r=>r.date>=data.start).length;$('totalKm').textContent=(data.runs.filter(r=>r.date>=data.start).reduce((a,r)=>a+r.distance,0)).toFixed(1)+' km';$('nextTitle').textContent='Easy run / walk · '+data.adaptive.sessions[0]+' min running';$('nextDescription').textContent='Follow each run/walk step below. Walking time is in addition to running time. Keep running easy and conversational.';$('nextSessionSteps').innerHTML=sessionMarkup('Monday',data.adaptive.sessions[0]);$('nextDay').textContent=data.weekend==='Saturday'?'Mon · Thu · Sat':'Mon · Thu · Sun';$('advice').textContent=advice();$('advice').className='notice'+(/REDUCE|HOLD/.test(advice())?' warn':'');$('livePlanRows').innerHTML=['Monday','Thursday',data.weekend].map((day,i)=>sessionMarkup(day,data.adaptive.sessions[i])).join('');$('planRows').innerHTML=weeks.map((r,i)=>`<div class="week ${i===data.adaptive.level?'current':''}"><strong>Week ${i+1} · ${r[0]}</strong><p>${r[1]}</p><small>Longest session: ${r[2]}</small></div>`).join('');$('longest').textContent=(Math.max(0,...data.runs.filter(r=>r.date>=data.start).map(r=>r.runningMinutes||0))).toFixed(0)+' min';$('pace').textContent=data.runs.filter(r=>r.date>=data.start).length?fmtPace(data.runs.filter(r=>r.date>=data.start).slice(-1)[0]):'—';let recent=data.runs.filter(r=>r.date>=data.start).slice(-12),max=Math.max(1,...recent.map(r=>r.distance));$('bars').innerHTML=recent.length?recent.map(r=>`<div class="barwrap"><div>${r.distance.toFixed(1)}</div><div class="bar" style="height:${Math.max(4,Math.round(r.distance/max*110))}px"></div><div>${ukDate(r.date).slice(0,5)}</div></div>`).join(''):'<p class="muted">Log your first run to see your progress.</p>';const filteredHistory=data.runs.filter(r=>$('historyFilter').value==='all'||($('historyFilter').value==='historical'?r.date<'2026-05-01':r.date>=data.start));$('history').innerHTML=filteredHistory.length?[...filteredHistory].reverse().map(r=>`<div class="historyitem"><strong>${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}</strong><span>${fmtPace(r)} · Effort ${r.effort}/10 · Pain ${r.pain==null?'not entered':r.pain+'/10'} · Morning ${r.morning==null?'pending':r.morning+'/10'}</span><div>${escapeHTML(r.notes||'')}</div><div class="activity-actions"><button type="button" class="tiny" data-match-run="${escapeHTML(String(r.id))}">${matchForRun(r.id)?'Matched: '+escapeHTML(matchLabel(matchForRun(r.id))):'Match to planned run'}</button><button type="button" class="tiny" data-edit-run="${escapeHTML(String(r.id))}">Edit activity</button><button type="button" class="tiny danger-button" data-delete-run="${escapeHTML(String(r.id))}">Delete</button></div></div>`).join(''):'<p class="muted">No runs recorded yet.</p>';$('startDate').value=data.start;$('weekend').value=data.weekend;$('weightGoal').value=data.weightGoal??'';$('recent5kSetting').value=data.recent5kBenchmark;renderWeights();renderCoachingDashboard();renderAdaptive();renderMatchSummary();}
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function go(page){document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id===page));document.querySelectorAll('nav button').forEach(el=>el.classList.toggle('selected',el.dataset.go===page));window.scrollTo(0,0)}
 $('historyFilter').addEventListener('change',render);
@@ -116,7 +193,7 @@ $('saveMorning').addEventListener('click',()=>{const current=data.runs.filter(r=
 $('saveSettings').addEventListener('click',()=>{if(!$('startDate').value)return;data.start=$('startDate').value;data.weekend=$('weekend').value;const benchmark=$('recent5kSetting').value.trim();if(!/^\d{1,2}:[0-5]\d$/.test(benchmark)){alert('Enter a valid 5K benchmark, for example 27:00.');return;}data.recent5kBenchmark=benchmark;data.weightGoal=$('weightGoal').value?Number($('weightGoal').value):null;save();render();alert('Settings saved')});
 function download(name,body,mime){const blob=new Blob([body],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('exportData').addEventListener('click',()=>download('running-comeback-backup-'+today()+'.json',JSON.stringify(data,null,2),'application/json'));
-$('importData').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let obj=JSON.parse(await f.text());if(!Array.isArray(obj.runs)||typeof obj.start!=='string')throw Error('Invalid backup');if(!confirm('Replace all existing running history with this backup?'))return;data={deletedStravaIds:Array.isArray(obj.deletedStravaIds)?obj.deletedStravaIds:[],start:obj.start,weekend:obj.weekend==='Saturday'?'Saturday':'Sunday',runs:obj.runs,weights:Array.isArray(obj.weights)?obj.weights:[],weightGoal:obj.weightGoal??null,recent5kBenchmark:obj.recent5kBenchmark||'27:00',adaptive:obj.adaptive&&typeof obj.adaptive==='object'?obj.adaptive:{level:0,proposal:null,lastReview:'',acceptedAt:''}};if(!Array.isArray(data.adaptive.sessions)||data.adaptive.sessions.length!==3)data.adaptive.sessions=[12,12,14];save();render();alert('Backup restored')}catch(err){alert('Could not import: '+err.message)}e.target.value=''});
+$('importData').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let obj=JSON.parse(await f.text());if(!Array.isArray(obj.runs)||typeof obj.start!=='string')throw Error('Invalid backup');if(!confirm('Replace all existing running history with this backup?'))return;data={deletedStravaIds:Array.isArray(obj.deletedStravaIds)?obj.deletedStravaIds:[],start:obj.start,weekend:obj.weekend==='Saturday'?'Saturday':'Sunday',runs:obj.runs,weights:Array.isArray(obj.weights)?obj.weights:[],weightGoal:obj.weightGoal??null,recent5kBenchmark:obj.recent5kBenchmark||'27:00',adaptive:obj.adaptive&&typeof obj.adaptive==='object'?obj.adaptive:{level:0,proposal:null,lastReview:'',acceptedAt:''}};if(!Array.isArray(data.adaptive.sessions)||data.adaptive.sessions.length!==3)data.adaptive.sessions=[12,12,14];data.sessionMatches=Array.isArray(obj.sessionMatches)?obj.sessionMatches:[];save();render();alert('Backup restored')}catch(err){alert('Could not import: '+err.message)}e.target.value=''});
 $('copyCoach').addEventListener('click',async()=>{let summary=`Running Comeback coaching review. Goal sub-50-minute 10K; previous best 55:00; age 57; prior calf/Achilles injury May 2026. Week ${weekIndex()+1}. Schedule Monday, Thursday, weekend (max 3/week). Recommendation: ${advice()}\nApproved training level: ${data.adaptive.level+1}/12. Weekly assessment: ${assessWeek().reason}\nWeight: ${data.weights.length?data.weights[data.weights.length-1].kg+' kg':'not recorded'}; target ${data.weightGoal??'none'} kg.\nRecent runs:\n`+data.runs.slice(-8).map(r=>`${ukDate(r.date)}: ${r.distance}km in ${minutesToHms(r.duration)}; jogging ${r.runningMinutes}min; effort ${r.effort}/10; pain ${r.pain??'not entered'}/10 (${r.location}, ${r.painType}); next morning ${r.morning??'not logged'}/10; notes ${r.notes||'-'}`).join('\n')+'\nPlease assess progress and recommend the next safe training sessions.';try{await navigator.clipboard.writeText(summary);$('copyStatus').textContent='Copied. Paste into your ChatGPT conversation.'}catch(e){download('coaching-summary.txt',summary,'text/plain');$('copyStatus').textContent='Downloaded summary text instead.'}});
 function renderWeights(){const entries=[...data.weights].sort((a,b)=>a.date.localeCompare(b.date));const first=entries[0],last=entries[entries.length-1];$('latestWeight').textContent=last?last.kg.toFixed(1)+' kg':'—';$('weightChange').textContent=first&&last?(last.kg-first.kg>0?'+':'')+(last.kg-first.kg).toFixed(1)+' kg':'—';$('weightGoalDisplay').textContent=data.weightGoal?data.weightGoal.toFixed(1)+' kg':'—';$('weightHistory').innerHTML=entries.length?[...entries].reverse().slice(0,12).map(e=>`<div class="historyitem"><strong>${escapeHTML(ukDate(e.date))} · ${e.kg.toFixed(1)} kg</strong><button type="button" class="tiny" data-delete-weight="${escapeHTML(e.date)}">Remove</button></div>`).join(''):'<p class="muted">No weight entries yet.</p>';const chart=$('weightChart');if(entries.length<2){chart.innerHTML='<p class="muted">Add at least two measurements to see a trend.</p>';return}const values=entries.slice(-16),lo=Math.min(...values.map(e=>e.kg))-1,hi=Math.max(...values.map(e=>e.kg))+1;const coords=values.map((e,i)=>`${20+i*280/(values.length-1)},${120-(e.kg-lo)/(hi-lo)*100}`).join(' ');chart.innerHTML=`<svg viewBox="0 0 320 145" role="img" aria-label="Weight trend from ${values[0].kg.toFixed(1)} to ${values[values.length-1].kg.toFixed(1)} kilograms"><line x1="20" y1="120" x2="300" y2="120" stroke="#cadbd2"/><polyline points="${coords}" fill="none" stroke="#198364" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((e,i)=>`<circle cx="${20+i*280/(values.length-1)}" cy="${120-(e.kg-lo)/(hi-lo)*100}" r="3" fill="#198364"/>`).join('')}<text x="20" y="140" font-size="10" fill="#506a70">${escapeHTML(values[0].date.slice(5))}</text><text x="260" y="140" font-size="10" fill="#506a70">${escapeHTML(values[values.length-1].date.slice(5))}</text></svg>`;}
 $('weightForm').addEventListener('submit',e=>{e.preventDefault();const date=$('weightDate').value,kg=Number($('weightKg').value);if(!date||!Number.isFinite(kg)||kg<25||kg>350)return;data.weights=data.weights.filter(x=>x.date!==date);data.weights.push({date,kg});data.weights.sort((a,b)=>a.date.localeCompare(b.date));save();render();$('weightMessage').textContent='Weight saved. A measurement on the same date is updated rather than duplicated.';$('weightKg').value='';});
@@ -173,7 +250,7 @@ $('history').addEventListener('click',e=>{
  const message=`Delete the ${r.distance.toFixed(2)} km activity on ${ukDate(r.date)}?`+(r.stravaId?'\\n\\nThis will remove it from Running Comeback and prevent it being re-imported on future Strava syncs. It will NOT delete the activity from Strava.':'')+'\\n\\nThis cannot be undone except by restoring a backup.';
  if(!confirm(message))return;
  if(r.stravaId&&!data.deletedStravaIds.includes(String(r.stravaId)))data.deletedStravaIds.push(String(r.stravaId));
- data.runs=data.runs.filter(x=>x!==r);
+ data.runs=data.runs.filter(x=>x!==r);data.sessionMatches=data.sessionMatches.filter(m=>String(m.runId)!==String(r.id));
  save();render();
 });
 
@@ -214,7 +291,7 @@ function assessWeek(){
  const suggested=[...lastApproved];
  if(increment>0){let idx=suggested.indexOf(Math.min(...suggested));suggested[idx]+=increment;}
  if(type==='progress'&&increment===0){type='hold';reason='The next increase would exceed the current 10% weekly limit; repeat this level.';}
- return {type,reason,runs:runs.length,km,oldKm,running,oldRunning,missing:missing.length,level:Math.max(0,Math.min(11,data.adaptive.level)),suggested,avgHR,avgEffort,currentTotal};
+ return {type,reason,runs:runs.length,matched:data.sessionMatches.filter(m=>m.week===mondayOf(today())&&runById(m.runId)).length,km,oldKm,running,oldRunning,missing:missing.length,level:Math.max(0,Math.min(11,data.adaptive.level)),suggested,avgHR,avgEffort,currentTotal};
 }
 function coachingSignature(){return JSON.stringify({start:data.start,runs:recentComeback(14).map(r=>[r.id,r.date,r.duration,r.runningMinutes,r.distance,r.effort,r.pain,r.morning,r.painType]),sessions:data.adaptive.sessions});}
 function explainEngine(a){
@@ -223,7 +300,7 @@ function explainEngine(a){
 }
 function renderAdaptive(){
  const a=assessWeek(),p=data.adaptive.proposal;
- $('adaptiveSummary').textContent=`Last 7 days: ${a.runs} runs · ${a.running.toFixed(1)} running min · ${a.km.toFixed(1)} km. Approved weekly running: ${a.currentTotal} min.`;
+ $('adaptiveSummary').textContent=`Last 7 days: ${a.runs} runs · ${a.matched}/3 planned sessions matched this calendar week · ${a.running.toFixed(1)} running min · ${a.km.toFixed(1)} km. Approved weekly running: ${a.currentTotal} min.`;
  $('activePlanNote').textContent=`Your approved three-session plan totals ${a.currentTotal} minutes running per week. Review your training and recovery before accepting changes. Calendar week ${weekIndex()+1} is reference only.`;
  $('adaptiveProposal').textContent=p?`${p.label}: ${p.reason}`:'Press Review my week to calculate a new recommendation. Your current sessions remain unchanged until you approve.';
  $('adaptiveProposal').className='notice'+(p&&p.type==='recover'?' warn':'');
