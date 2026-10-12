@@ -24,3 +24,16 @@
 @media(max-width:480px){.twocol>.time-field{grid-column:1/-1}.time-stepper{padding:8px 5px!important}}
 
 .engine-tag{font-size:12px;font-weight:700;color:#226c58;letter-spacing:.025em;margin:4px 0 8px}.engine-plan{border:1px solid #c9e4d8;border-radius:12px;padding:12px;margin:12px 0;font-weight:650;line-height:1.6}.engine-why{margin:10px 0 15px}.engine-why summary{cursor:pointer;color:#176d55;font-weight:700}.engine-why div{white-space:pre-line;line-height:1.6;font-size:14px;padding:10px 0}.time-preview{margin:8px 0 14px}
+
+.session-card{border:1px solid #cddfd7;border-radius:12px;padding:12px;margin:12px 0;background:#fff;color:#16343b}
+.session-card-title{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.session-card-title span{font-weight:700;color:#19755c}
+.session-summary{font-size:13px;color:#526c70;margin:8px 0 12px}
+.session-steps{list-style:decimal;margin:0;padding-left:25px}
+.session-steps li{padding:9px 6px;border-bottom:1px solid #e4ece9;display:list-item}
+.session-steps li:last-child{border-bottom:0}
+.session-steps li span{display:inline-block;max-width:75%}
+.session-steps li strong{float:right;white-space:nowrap}
+.session-steps li.run{color:#17684d;font-weight:600}
+.session-steps li.walk{color:#536c73}
+#enginePlan .session-card{margin-bottom:14px}
