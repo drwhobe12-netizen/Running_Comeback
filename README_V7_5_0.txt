@@ -1,0 +1,1 @@
+Running Comeback v7.5.0: Tap-to-enlarge exercise pictures.\nTap any image on Strength screen to view larger illustration and instructions. Close via Close, outside backdrop, or Escape. Keyboard accessible. Images cached for offline use.\nBackup your JSON before uploading all ZIP files to your GitHub Pages repository root.\n

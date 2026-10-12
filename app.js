@@ -192,10 +192,47 @@ const strengthExercises=[
  {id:'ankle-mobility',title:'Ankle circles / pumps',group:'Mobility',dose:'10 circles and 10 pumps each ankle',how:'While seated, move your ankles through a comfortable range without forcing the end position.',tip:'Good for gentle movement on non-running days.'},
  {id:'calf-stretch',title:'Gentle calf stretch',group:'Optional stretching',dose:'15–20 seconds each side, 1–2 times',how:'Face a wall with one leg behind. Keep the heel down and lean forward gently until a mild stretch is felt.',tip:'Skip if stretching aggravates the Achilles; do not force it.'}
 ];
+
+let strengthZoomPreviousFocus=null;
+function closeStrengthZoom(){
+ const modal=$('strengthZoomModal');
+ if(modal.classList.contains('hidden'))return;
+ modal.classList.add('hidden');
+ document.body.classList.remove('strength-zoom-open');
+ if(strengthZoomPreviousFocus&&document.contains(strengthZoomPreviousFocus))strengthZoomPreviousFocus.focus();
+ strengthZoomPreviousFocus=null;
+}
+function openStrengthZoom(id){
+ const x=strengthExercises.find(e=>e.id===id);if(!x)return;
+ strengthZoomPreviousFocus=document.activeElement;
+ $('strengthZoomImage').src=`exercise-${x.id}.webp`;
+ $('strengthZoomImage').alt=`Exercise illustration: ${x.title}`;
+ $('strengthZoomTitle').textContent=x.title;
+ $('strengthZoomDose').textContent=x.dose;
+ $('strengthZoomInstructions').textContent=x.how;
+ $('strengthZoomTip').textContent=x.tip;
+ $('strengthZoomModal').classList.remove('hidden');
+ document.body.classList.add('strength-zoom-open');
+ $('closeStrengthZoom').focus();
+}
+document.addEventListener('click',e=>{
+ const trigger=e.target.closest('[data-enlarge-exercise]');
+ if(trigger){openStrengthZoom(trigger.dataset.enlargeExercise);return;}
+ if(e.target===$('strengthZoomModal'))closeStrengthZoom();
+});
+$('closeStrengthZoom').addEventListener('click',closeStrengthZoom);
+document.addEventListener('keydown',e=>{
+ if($('strengthZoomModal').classList.contains('hidden'))return;
+ if(e.key==='Escape'){e.preventDefault();closeStrengthZoom();}
+ if(e.key==='Tab'){
+  e.preventDefault();
+  $('closeStrengthZoom').focus();
+ }
+});
 function renderStrength(){
  const list=$('strengthExerciseList');if(!list)return;
  const previous=new Set([...list.querySelectorAll('input[data-strength-id]:checked')].map(x=>x.dataset.strengthId));
- list.innerHTML=strengthExercises.map(x=>`<label class="strength-exercise"><input type="checkbox" data-strength-id="${x.id}" ${previous.has(x.id)?'checked':''}><span class="strength-copy"><strong>${escapeHTML(x.title)}</strong><small>${escapeHTML(x.group)} · ${escapeHTML(x.dose)}</small><span>${escapeHTML(x.how)}</span><em>${escapeHTML(x.tip)}</em></span></label>`).join('');
+ list.innerHTML=strengthExercises.map(x=>`<div class="strength-exercise"><input type="checkbox" aria-label="Completed ${escapeHTML(x.title)}" data-strength-id="${x.id}" ${previous.has(x.id)?'checked':''}><button class="strength-photo-button" type="button" data-enlarge-exercise="${x.id}" aria-label="Enlarge picture: ${escapeHTML(x.title)}"><img class="strength-photo" src="exercise-${x.id}.webp" alt="Illustration demonstrating ${escapeHTML(x.title)}" loading="lazy"><span class="strength-zoom-hint">Tap to enlarge</span></button><span class="strength-copy"><strong>${escapeHTML(x.title)}</strong><small>${escapeHTML(x.group)} · ${escapeHTML(x.dose)}</small><span>${escapeHTML(x.how)}</span><em>${escapeHTML(x.tip)}</em></span></div>`).join('');
  const pending=[...data.strengthSessions].reverse().find(x=>x.morning==null);
  $('strengthMorningPending').innerHTML=pending?`<p>Session ${ukDate(pending.date)} · ${pending.exercises.length} exercises</p><label>Next-morning pain / stiffness (0–10)<input id="strengthMorningValue" type="range" min="0" max="10" value="0"><output id="strengthMorningOutput">0</output></label><button class="secondary" id="saveStrengthMorning" type="button">Save check-in</button>`:'<p class="muted">No exercise session awaiting a morning check-in.</p>';
  if(pending){
