@@ -26,6 +26,24 @@ const advice=()=>{const currentRuns=data.runs.filter(r=>r.date>=data.start&&r.da
 const ukDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?`${value.slice(8,10)}.${value.slice(5,7)}.${value.slice(0,4)}`:String(value||'');
 // Keep durations internally in minutes so existing data and calculations remain compatible.
 const hmsToMinutes=value=>{const m=/^(\d{1,3}):([0-5]\d):([0-5]\d)$/.exec(String(value||'').trim());return m?Number(m[1])*60+Number(m[2])+Number(m[3])/60:NaN};
+// Automatically insert separators while entering six digits (HHMMSS).
+// Four digits are interpreted as MMSS when the field loses focus.
+function maskActivityTime(input){
+ const digits=input.value.replace(/\D/g,'').slice(0,6);
+ if(!digits){input.value='';return}
+ if(digits.length<=2)input.value=digits;
+ else if(digits.length<=4)input.value=digits.slice(0,2)+':'+digits.slice(2);
+ else input.value=digits.slice(0,2)+':'+digits.slice(2,4)+':'+digits.slice(4);
+}
+function completeActivityTime(input){
+ const digits=input.value.replace(/\D/g,'');
+ if(!digits)return;
+ if(digits.length<=4){const padded=digits.padStart(4,'0');input.value='00:'+padded.slice(0,2)+':'+padded.slice(2)}
+ else if(digits.length<=6){const padded=digits.padStart(6,'0');input.value=padded.slice(0,2)+':'+padded.slice(2,4)+':'+padded.slice(4)}
+}
+for(const id of ['duration','editRunDuration']){
+ const input=$(id);input.addEventListener('input',()=>maskActivityTime(input));input.addEventListener('blur',()=>completeActivityTime(input));
+}
 const minutesToHms=value=>{const seconds=Math.round(Number(value)*60);if(!Number.isFinite(seconds)||seconds<0)return '00:00:00';return `${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
 const fmtPace=r=>r.distance>0?(()=>{let n=r.duration/r.distance;return `${Math.floor(Math.round(n*60)/60)}:${String(Math.round(n*60)%60).padStart(2,'0')}/km`})():'—';
 function render(){let w=weekIndex();$('weekNumber').textContent=`${w+1} / 12`;$('runCount').textContent=data.runs.filter(r=>r.date>=data.start).length;$('totalKm').textContent=(data.runs.filter(r=>r.date>=data.start).reduce((a,r)=>a+r.distance,0)).toFixed(1)+' km';$('nextTitle').textContent=weeks[Math.min(11,data.adaptive.level)][0];$('nextDescription').textContent=weeks[Math.min(11,data.adaptive.level)][1];$('nextDay').textContent=data.weekend==='Saturday'?'Mon · Thu · Sat':'Mon · Thu · Sun';$('advice').textContent=advice();$('advice').className='notice'+(/REDUCE|HOLD/.test(advice())?' warn':'');$('planRows').innerHTML=weeks.map((r,i)=>`<div class="week ${i===data.adaptive.level?'current':''}"><strong>Week ${i+1} · ${r[0]}</strong><p>${r[1]}</p><small>Longest session: ${r[2]}</small></div>`).join('');$('longest').textContent=(Math.max(0,...data.runs.filter(r=>r.date>=data.start).map(r=>r.runningMinutes||0))).toFixed(0)+' min';$('pace').textContent=data.runs.filter(r=>r.date>=data.start).length?fmtPace(data.runs.filter(r=>r.date>=data.start).slice(-1)[0]):'—';let recent=data.runs.filter(r=>r.date>=data.start).slice(-12),max=Math.max(1,...recent.map(r=>r.distance));$('bars').innerHTML=recent.length?recent.map(r=>`<div class="barwrap"><div>${r.distance.toFixed(1)}</div><div class="bar" style="height:${Math.max(4,Math.round(r.distance/max*110))}px"></div><div>${ukDate(r.date).slice(0,5)}</div></div>`).join(''):'<p class="muted">Log your first run to see your progress.</p>';const filteredHistory=data.runs.filter(r=>$('historyFilter').value==='all'||($('historyFilter').value==='historical'?r.date<'2026-05-01':r.date>=data.start));$('history').innerHTML=filteredHistory.length?[...filteredHistory].reverse().map(r=>`<div class="historyitem"><strong>${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}</strong><span>${fmtPace(r)} · Effort ${r.effort}/10 · Pain ${r.pain==null?'not entered':r.pain+'/10'} · Morning ${r.morning==null?'pending':r.morning+'/10'}</span><div>${escapeHTML(r.notes||'')}</div><div class="activity-actions"><button type="button" class="tiny" data-edit-run="${escapeHTML(String(r.id))}">Edit activity</button><button type="button" class="tiny danger-button" data-delete-run="${escapeHTML(String(r.id))}">Delete</button></div></div>`).join(''):'<p class="muted">No runs recorded yet.</p>';$('startDate').value=data.start;$('weekend').value=data.weekend;$('weightGoal').value=data.weightGoal??'';$('recent5kSetting').value=data.recent5kBenchmark;renderWeights();renderCoachingDashboard();renderAdaptive();}
@@ -35,7 +53,7 @@ $('historyFilter').addEventListener('change',render);
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 ['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('input',()=>$(id+'Value').textContent=$(id).value));
 $('runDate').value=today();$('weightDate').value=today();
-$('runForm').addEventListener('submit',e=>{e.preventDefault();let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:Number($('runningMinutes').value),effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes>r.duration){alert('Please enter a valid date, distance, total time and running time.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
+$('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:Number($('runningMinutes').value),effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes>r.duration){alert('Please enter a valid date, distance, total time and running time.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
 $('saveMorning').addEventListener('click',()=>{const current=data.runs.filter(r=>r.date>=data.start&&r.date<=today());if(!current.length){$('morningStatus').textContent='Log a comeback run first.';return}let r=current[current.length-1];if(r.date===today()){ $('morningStatus').textContent='Please complete this check-in tomorrow morning, not immediately after your run.';return;}r.morning=Number($('morningPain').value);save();render();$('morningStatus').textContent=`Saved for your latest run (${r.date}).`});
 $('saveSettings').addEventListener('click',()=>{if(!$('startDate').value)return;data.start=$('startDate').value;data.weekend=$('weekend').value;const benchmark=$('recent5kSetting').value.trim();if(!/^\d{1,2}:[0-5]\d$/.test(benchmark)){alert('Enter a valid 5K benchmark, for example 27:00.');return;}data.recent5kBenchmark=benchmark;data.weightGoal=$('weightGoal').value?Number($('weightGoal').value):null;save();render();alert('Settings saved')});
 function download(name,body,mime){const blob=new Blob([body],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -78,7 +96,7 @@ $('closeActivityEditor').addEventListener('click',closeActivityEditor);
 $('cancelActivityEditor').addEventListener('click',closeActivityEditor);
 $('activityEditor').addEventListener('click',e=>{if(e.target===$('activityEditor'))closeActivityEditor()});
 $('editActivityForm').addEventListener('submit',e=>{
- e.preventDefault();
+ e.preventDefault();completeActivityTime($('editRunDuration'));
  const r=data.runs.find(x=>String(x.id)===editingRunId);if(!r)return;
  const distance=Number($('editRunDistance').value),duration=hmsToMinutes($('editRunDuration').value),running=Number($('editRunRunning').value);
  if(!$('editRunDate').value||!Number.isFinite(distance)||distance<=0||!Number.isFinite(duration)||duration<=0||!Number.isFinite(running)||running<0||running>duration){alert('Enter a valid date, distance, duration and running time.');return}
@@ -205,7 +223,11 @@ function makeWeeklyReport(){
 function renderCoachingDashboard(){
  const all=data.runs,comeback=all.filter(r=>r.date>=data.start&&r.date<=today()),historic=all.filter(r=>r.date<'2026-05-01');
  const best=target=>{let eligible=historic.filter(r=>Math.abs(r.distance-target)<=target*0.03&&r.duration>0);return eligible.length?formatRace(Math.min(...eligible.map(r=>r.duration*target/r.distance))):'—'};
- $('historic5k').textContent=best(5);$('historic10k').textContent=best(10);$('recent5k').textContent=data.recent5kBenchmark;const comeback5=comeback.filter(r=>Math.abs(r.distance-5)<=0.15&&r.duration>0);$('comeback5k').textContent=comeback5.length?formatRace(Math.min(...comeback5.map(r=>r.duration*5/r.distance))):'Not tested';
+ $('historic5k').textContent=best(5);$('historic10k').textContent=best(10);
+ const qualifying5k=historic.filter(r=>Math.abs(r.distance-5)<=0.15&&r.duration>0).sort((a,b)=>b.date.localeCompare(a.date));
+ const recent5kRun=qualifying5k[0];
+ $('recent5k').textContent=recent5kRun?formatRace(recent5kRun.duration*5/recent5kRun.distance):data.recent5kBenchmark;
+ $('recent5k').title=recent5kRun?'Latest qualifying pre-injury 5K: '+ukDate(recent5kRun.date):'Manual benchmark (no qualifying historical 5K found)';const comeback5=comeback.filter(r=>Math.abs(r.distance-5)<=0.15&&r.duration>0);$('comeback5k').textContent=comeback5.length?formatRace(Math.min(...comeback5.map(r=>r.duration*5/r.distance))):'Not tested';
  $('comebackKm').textContent=comeback.reduce((s,r)=>s+r.distance,0).toFixed(1);
  const rep=makeWeeklyReport();$('weekKm').textContent=rep.km.toFixed(1)+' km';$('weekRuns').textContent=rep.recent.length;
  $('comebackLongest').textContent=comeback.length?Math.max(...comeback.map(r=>r.distance)).toFixed(1)+' km':'—';
