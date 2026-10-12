@@ -52,3 +52,37 @@ $('history').addEventListener('click',e=>{let id=e.target.dataset.feedback;if(!i
 
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 render();
+
+// Live Strava integration (v4). Private key is entered on device, never shipped in source.
+const STRAVA_API='https://running-comeback-strava.drwhobe12.workers.dev';
+const stravaInput=$('stravaAccessKey'), stravaRemember=$('rememberStravaKey'), stravaStatus=$('liveStravaStatus');
+try {const remembered=localStorage.getItem('runningComebackStravaKey');if(remembered){stravaInput.value=remembered;stravaRemember.checked=true}}catch(e){}
+$('forgetStravaKey').addEventListener('click',()=>{stravaInput.value='';stravaRemember.checked=false;sessionStorage.removeItem('runningComebackStravaKey');localStorage.removeItem('runningComebackStravaKey');stravaStatus.textContent='Key forgotten on this device.'});
+$('syncStrava').addEventListener('click',async()=>{
+ const key=stravaInput.value.trim()||sessionStorage.getItem('runningComebackStravaKey');
+ if(!key){stravaStatus.textContent='Enter your APP_ACCESS_KEY first.';return}
+ $('syncStrava').disabled=true;stravaStatus.textContent='Retrieving your runs securely from Strava…';
+ try{
+  if(stravaRemember.checked)localStorage.setItem('runningComebackStravaKey',key);
+  else{localStorage.removeItem('runningComebackStravaKey');sessionStorage.setItem('runningComebackStravaKey',key)}
+  let count=0,seen=0,added=0;
+  const existing=new Set(data.runs.map(r=>String(r.stravaId||'')).filter(Boolean));
+  for(let page=1;page<=10;page++){
+   const response=await fetch(STRAVA_API+'/activities?page='+page,{headers:{'Authorization':'Bearer '+key},cache:'no-store'});
+   if(!response.ok){let message='HTTP '+response.status;try{const j=await response.json();message=j.error||message}catch(e){}throw Error(message)}
+   const activities=await response.json();if(!Array.isArray(activities))throw Error('Unexpected activity response');
+   for(const a of activities){
+    seen++;if(!a.id||existing.has(String(a.id)))continue;
+    const km=Number(a.distance)/1000,mins=Number(a.moving_time)/60;
+    if(!Number.isFinite(km)||km<=0||!Number.isFinite(mins)||mins<=0)continue;
+    const date=String(a.start_date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue;
+    data.runs.push({id:'strava-'+a.id,stravaId:String(a.id),source:'Strava live',date,session:'Strava import',distance:Math.round(km*100)/100,duration:Math.round(mins*10)/10,runningMinutes:Math.round(mins*10)/10,effort:null,pain:null,location:'Not recorded',painType:'Not recorded',notes:String(a.name||''),morning:null,averageHR:Number(a.average_heartrate)||null,elevationGain:Number(a.total_elevation_gain)||null});
+    existing.add(String(a.id));added++;
+   }
+   if(activities.length<100)break;
+  }
+  data.runs.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  save();render();stravaStatus.textContent=`Sync complete: ${added} new runs imported, ${seen} Strava activities checked. Add injury feedback under Progress → Training history.`;
+ }catch(err){stravaStatus.textContent='Sync failed: '+err.message+'. Check your key and Strava connection.'}
+ finally{$('syncStrava').disabled=false}
+});
