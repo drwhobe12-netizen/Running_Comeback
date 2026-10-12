@@ -4,3 +4,5 @@
 
 /* App version label */
 .app-version{margin-top:10px;font-size:12px;letter-spacing:.07em;opacity:.75;font-weight:600}
+
+.activity-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.danger-button{border:1px solid #c34b4b!important;color:#a52a2a!important;background:#fff7f7!important}.activity-modal{position:fixed;inset:0;background:rgba(9,25,30,.72);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:16px}.activity-modal.hidden{display:none}.activity-dialog{width:min(100%,560px);margin:20px auto 80px;max-height:none;background:white;color:#1b3033}.activity-dialog-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.activity-dialog-heading h2{margin:0}.activity-dialog input,.activity-dialog select,.activity-dialog textarea{max-width:100%}

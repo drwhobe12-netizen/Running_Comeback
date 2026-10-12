@@ -1,0 +1,1 @@
+Running Comeback v6.3.0 — Activity management\n\nProgress > Training history > All runs: Edit activity or Delete.\nEditing Strava-imported activities changes the local app record only.\nDeleting Strava-imported activities blocks their automatic re-import.\nExport a JSON backup before installing.\nUpload all extracted files to GitHub Pages repository root.\n
