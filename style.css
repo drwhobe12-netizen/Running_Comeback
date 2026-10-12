@@ -9,3 +9,16 @@
 
 /* Accessible mobile-friendly duration counters */
 .time-field{width:100%;min-width:0}.time-title{font-weight:650;margin-bottom:10px}.time-stepper{display:flex;align-items:center;gap:6px;justify-content:center;background:#f3f7f5;border:1px solid #d4e0dc;border-radius:14px;padding:12px 6px}.time-unit{display:flex;flex:1;min-width:0;flex-direction:column;align-items:center;gap:5px}.time-unit button{width:100%;max-width:86px;min-height:38px;border:1px solid #b9cfc6;border-radius:9px;background:white;color:#14664e;font-size:20px;font-weight:700;touch-action:manipulation}.time-unit input{width:100%!important;min-width:0;max-width:86px!important;text-align:center;font-size:21px;font-weight:750;padding:9px 2px!important;box-sizing:border-box;appearance:textfield;-moz-appearance:textfield}.time-unit input::-webkit-inner-spin-button,.time-unit input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.time-unit small{font-size:11px;color:#5c6f6a}.time-stepper>b{font-size:24px;align-self:center;margin-top:-14px}.time-preview{text-align:center;font-size:14px;margin:8px 0 0}.time-preview strong{font-variant-numeric:tabular-nums}@media(max-width:400px){.time-stepper{gap:3px;padding:10px 3px}.time-unit input{font-size:19px}}
+
+/* v6.7: phone-first activity duration editor */
+.twocol>.time-field{grid-column:1/-1;width:100%;min-width:0}
+.time-field{display:block!important;max-width:100%;margin:4px 0 12px}
+.time-title{font-size:15px;line-height:1.4;font-weight:700;margin:0 0 8px}
+.time-stepper{display:grid!important;grid-template-columns:minmax(0,1fr) 10px minmax(0,1fr) 10px minmax(0,1fr)!important;align-items:center!important;gap:3px!important;width:100%;box-sizing:border-box;padding:10px 8px!important}
+.time-stepper .time-unit{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important;min-width:0!important;width:100%}
+.time-stepper .time-unit button{display:block!important;width:100%!important;max-width:none!important;height:38px!important;min-height:38px!important;padding:0!important;line-height:1!important;font-size:23px!important;border-radius:8px!important}
+.time-stepper .time-unit input{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;height:49px!important;margin:0!important;padding:5px 0!important;text-align:center!important;font-size:22px!important;box-sizing:border-box!important}
+.time-stepper .time-unit small{display:block!important;text-align:center!important;white-space:nowrap;font-size:12px!important}
+.time-stepper>b{display:block!important;text-align:center!important;align-self:center!important;margin:0!important;font-size:20px!important}
+.time-preview{margin:9px 0 0!important;text-align:center}
+@media(max-width:480px){.twocol>.time-field{grid-column:1/-1}.time-stepper{padding:8px 5px!important}}
