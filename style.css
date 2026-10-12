@@ -41,3 +41,14 @@
 .session-match{border-top:1px solid #dce6e1;padding:12px 0;line-height:1.7}
 .session-match button{display:block;margin-top:6px}
 #matchActivityChoices select{width:100%}
+
+nav{grid-template-columns:repeat(6,minmax(0,1fr))}
+nav button{font-size:21px;min-width:0}
+nav button span{font-size:9px}
+.strength-exercise{display:flex;align-items:flex-start;gap:12px;padding:13px 4px;border-bottom:1px solid #dce8e2;cursor:pointer}
+.strength-exercise input{flex:0 0 20px;width:20px;height:20px;margin-top:4px}
+.strength-copy{display:flex;flex-direction:column;gap:4px;min-width:0;line-height:1.45}
+.strength-copy small{font-size:12px;color:#21745c;font-weight:700}
+.strength-copy span{font-size:13px;color:#38535a}
+.strength-copy em{font-size:12px;color:#687d7f;font-style:normal}
+@media(max-width:360px){nav button span{font-size:8px}nav button{font-size:19px}}

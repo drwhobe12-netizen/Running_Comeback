@@ -1,0 +1,1 @@
+Running Comeback v7.3.0: Separate Strength tab with calf/Achilles, balance, hip stability and gentle mobility exercises. Exercise logs and next-morning feedback are saved locally and included in JSON backups. Export backup before updating GitHub Pages. Not a medical rehabilitation prescription.
