@@ -4,7 +4,7 @@ const defaultData=()=>({start:'2026-10-12',weekend:'Sunday',runs:[],weights:[],w
 let data;
 try{data=JSON.parse(localStorage.getItem(KEY))||defaultData()}catch(e){data=defaultData()}
 const $=id=>document.getElementById(id);
-if(!Array.isArray(data.deletedStravaIds))data.deletedStravaIds=[];if(!Array.isArray(data.weights))data.weights=[];if(!('weightGoal' in data))data.weightGoal=null;if(!data.recent5kBenchmark)data.recent5kBenchmark='27:00';if(!data.adaptive||typeof data.adaptive!=='object')data.adaptive={level:0,proposal:null,lastReview:'',acceptedAt:''};
+if(!Array.isArray(data.deletedStravaIds))data.deletedStravaIds=[];if(!Array.isArray(data.weights))data.weights=[];if(!('weightGoal' in data))data.weightGoal=null;if(!data.recent5kBenchmark)data.recent5kBenchmark='27:00';if(!data.adaptive||typeof data.adaptive!=='object')data.adaptive={level:0,proposal:null,lastReview:'',acceptedAt:''};if(!Array.isArray(data.adaptive.sessions)||data.adaptive.sessions.length!==3)data.adaptive.sessions=[12,12,14];
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data));
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const weeks=[
@@ -73,22 +73,34 @@ for(const id of ['duration','editRunDuration']){
  updateTimeCounter(id);
 }
 const minutesToHms=value=>{const seconds=Math.round(Number(value)*60);if(!Number.isFinite(seconds)||seconds<0)return '00:00:00';return `${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
+function calculatedRunMinutes(durationId,walkingId){
+ const duration=hmsToMinutes($(durationId).value),walk=Number($(walkingId).value||0);
+ return {duration,walk,running:duration-walk};
+}
+function showCalculatedRunTime(){
+ for(const [dur,walk,out] of [['duration','walkingMinutes','calculatedRunning'],['editRunDuration','editRunWalking','editCalculatedRunning']]){
+  const r=calculatedRunMinutes(dur,walk);$(out).textContent=Number.isFinite(r.running)&&r.running>=0?minutesToHms(r.running):'Walking exceeds total time';
+ }
+}
+for(const el of document.querySelectorAll('.time-stepper'))el.addEventListener('input',showCalculatedRunTime);
+for(const el of document.querySelectorAll('.time-stepper button'))el.addEventListener('click',()=>setTimeout(showCalculatedRunTime,0));
+for(const id of ['walkingMinutes','editRunWalking'])$(id).addEventListener('input',showCalculatedRunTime);
 const fmtPace=r=>r.distance>0?(()=>{let n=r.duration/r.distance;return `${Math.floor(Math.round(n*60)/60)}:${String(Math.round(n*60)%60).padStart(2,'0')}/km`})():'—';
-function render(){let w=weekIndex();$('weekNumber').textContent=`${w+1} / 12`;$('runCount').textContent=data.runs.filter(r=>r.date>=data.start).length;$('totalKm').textContent=(data.runs.filter(r=>r.date>=data.start).reduce((a,r)=>a+r.distance,0)).toFixed(1)+' km';$('nextTitle').textContent=weeks[Math.min(11,data.adaptive.level)][0];$('nextDescription').textContent=weeks[Math.min(11,data.adaptive.level)][1];$('nextDay').textContent=data.weekend==='Saturday'?'Mon · Thu · Sat':'Mon · Thu · Sun';$('advice').textContent=advice();$('advice').className='notice'+(/REDUCE|HOLD/.test(advice())?' warn':'');$('planRows').innerHTML=weeks.map((r,i)=>`<div class="week ${i===data.adaptive.level?'current':''}"><strong>Week ${i+1} · ${r[0]}</strong><p>${r[1]}</p><small>Longest session: ${r[2]}</small></div>`).join('');$('longest').textContent=(Math.max(0,...data.runs.filter(r=>r.date>=data.start).map(r=>r.runningMinutes||0))).toFixed(0)+' min';$('pace').textContent=data.runs.filter(r=>r.date>=data.start).length?fmtPace(data.runs.filter(r=>r.date>=data.start).slice(-1)[0]):'—';let recent=data.runs.filter(r=>r.date>=data.start).slice(-12),max=Math.max(1,...recent.map(r=>r.distance));$('bars').innerHTML=recent.length?recent.map(r=>`<div class="barwrap"><div>${r.distance.toFixed(1)}</div><div class="bar" style="height:${Math.max(4,Math.round(r.distance/max*110))}px"></div><div>${ukDate(r.date).slice(0,5)}</div></div>`).join(''):'<p class="muted">Log your first run to see your progress.</p>';const filteredHistory=data.runs.filter(r=>$('historyFilter').value==='all'||($('historyFilter').value==='historical'?r.date<'2026-05-01':r.date>=data.start));$('history').innerHTML=filteredHistory.length?[...filteredHistory].reverse().map(r=>`<div class="historyitem"><strong>${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}</strong><span>${fmtPace(r)} · Effort ${r.effort}/10 · Pain ${r.pain==null?'not entered':r.pain+'/10'} · Morning ${r.morning==null?'pending':r.morning+'/10'}</span><div>${escapeHTML(r.notes||'')}</div><div class="activity-actions"><button type="button" class="tiny" data-edit-run="${escapeHTML(String(r.id))}">Edit activity</button><button type="button" class="tiny danger-button" data-delete-run="${escapeHTML(String(r.id))}">Delete</button></div></div>`).join(''):'<p class="muted">No runs recorded yet.</p>';$('startDate').value=data.start;$('weekend').value=data.weekend;$('weightGoal').value=data.weightGoal??'';$('recent5kSetting').value=data.recent5kBenchmark;renderWeights();renderCoachingDashboard();renderAdaptive();}
+function render(){let w=weekIndex();$('weekNumber').textContent=`${w+1} / 12`;$('runCount').textContent=data.runs.filter(r=>r.date>=data.start).length;$('totalKm').textContent=(data.runs.filter(r=>r.date>=data.start).reduce((a,r)=>a+r.distance,0)).toFixed(1)+' km';$('nextTitle').textContent='Easy run / walk · '+data.adaptive.sessions[0]+' min running';$('nextDescription').textContent=`Monday: ${data.adaptive.sessions[0]} min running · Thursday: ${data.adaptive.sessions[1]} min · Weekend: ${data.adaptive.sessions[2]} min. Easy conversational effort; add walking breaks, a 5-minute warm-up walk and cool-down. If symptoms increase, stop and reassess.`;$('nextDay').textContent=data.weekend==='Saturday'?'Mon · Thu · Sat':'Mon · Thu · Sun';$('advice').textContent=advice();$('advice').className='notice'+(/REDUCE|HOLD/.test(advice())?' warn':'');$('livePlanRows').innerHTML=['Monday','Thursday',data.weekend].map((day,i)=>`<div class="week"><strong>${day} · ${data.adaptive.sessions[i]} min easy running</strong><p>Use walk breaks as needed; keep the effort conversational. No speed work.</p></div>`).join('');$('planRows').innerHTML=weeks.map((r,i)=>`<div class="week ${i===data.adaptive.level?'current':''}"><strong>Week ${i+1} · ${r[0]}</strong><p>${r[1]}</p><small>Longest session: ${r[2]}</small></div>`).join('');$('longest').textContent=(Math.max(0,...data.runs.filter(r=>r.date>=data.start).map(r=>r.runningMinutes||0))).toFixed(0)+' min';$('pace').textContent=data.runs.filter(r=>r.date>=data.start).length?fmtPace(data.runs.filter(r=>r.date>=data.start).slice(-1)[0]):'—';let recent=data.runs.filter(r=>r.date>=data.start).slice(-12),max=Math.max(1,...recent.map(r=>r.distance));$('bars').innerHTML=recent.length?recent.map(r=>`<div class="barwrap"><div>${r.distance.toFixed(1)}</div><div class="bar" style="height:${Math.max(4,Math.round(r.distance/max*110))}px"></div><div>${ukDate(r.date).slice(0,5)}</div></div>`).join(''):'<p class="muted">Log your first run to see your progress.</p>';const filteredHistory=data.runs.filter(r=>$('historyFilter').value==='all'||($('historyFilter').value==='historical'?r.date<'2026-05-01':r.date>=data.start));$('history').innerHTML=filteredHistory.length?[...filteredHistory].reverse().map(r=>`<div class="historyitem"><strong>${ukDate(r.date)} · ${r.distance.toFixed(2)} km · ${minutesToHms(r.duration)}</strong><span>${fmtPace(r)} · Effort ${r.effort}/10 · Pain ${r.pain==null?'not entered':r.pain+'/10'} · Morning ${r.morning==null?'pending':r.morning+'/10'}</span><div>${escapeHTML(r.notes||'')}</div><div class="activity-actions"><button type="button" class="tiny" data-edit-run="${escapeHTML(String(r.id))}">Edit activity</button><button type="button" class="tiny danger-button" data-delete-run="${escapeHTML(String(r.id))}">Delete</button></div></div>`).join(''):'<p class="muted">No runs recorded yet.</p>';$('startDate').value=data.start;$('weekend').value=data.weekend;$('weightGoal').value=data.weightGoal??'';$('recent5kSetting').value=data.recent5kBenchmark;renderWeights();renderCoachingDashboard();renderAdaptive();}
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function go(page){document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id===page));document.querySelectorAll('nav button').forEach(el=>el.classList.toggle('selected',el.dataset.go===page));window.scrollTo(0,0)}
 $('historyFilter').addEventListener('change',render);
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 ['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('input',()=>$(id+'Value').textContent=$(id).value));
 $('runDate').value=today();$('weightDate').value=today();
-$('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:Number($('runningMinutes').value),effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes>r.duration){alert('Please enter a valid date, distance, total time and running time.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();setTimeCounter('duration',0);$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
+$('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:calculatedRunMinutes('duration','walkingMinutes').running,effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes<0||r.runningMinutes>r.duration){alert('Check total time and walking time: walking cannot exceed the activity duration.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();setTimeCounter('duration',0);showCalculatedRunTime();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
 $('saveMorning').addEventListener('click',()=>{const current=data.runs.filter(r=>r.date>=data.start&&r.date<=today());if(!current.length){$('morningStatus').textContent='Log a comeback run first.';return}let r=current[current.length-1];if(r.date===today()){ $('morningStatus').textContent='Please complete this check-in tomorrow morning, not immediately after your run.';return;}r.morning=Number($('morningPain').value);save();render();$('morningStatus').textContent=`Saved for your latest run (${r.date}).`});
 $('saveSettings').addEventListener('click',()=>{if(!$('startDate').value)return;data.start=$('startDate').value;data.weekend=$('weekend').value;const benchmark=$('recent5kSetting').value.trim();if(!/^\d{1,2}:[0-5]\d$/.test(benchmark)){alert('Enter a valid 5K benchmark, for example 27:00.');return;}data.recent5kBenchmark=benchmark;data.weightGoal=$('weightGoal').value?Number($('weightGoal').value):null;save();render();alert('Settings saved')});
 function download(name,body,mime){const blob=new Blob([body],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('exportData').addEventListener('click',()=>download('running-comeback-backup-'+today()+'.json',JSON.stringify(data,null,2),'application/json'));
-$('importData').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let obj=JSON.parse(await f.text());if(!Array.isArray(obj.runs)||typeof obj.start!=='string')throw Error('Invalid backup');if(!confirm('Replace all existing running history with this backup?'))return;data={deletedStravaIds:Array.isArray(obj.deletedStravaIds)?obj.deletedStravaIds:[],start:obj.start,weekend:obj.weekend==='Saturday'?'Saturday':'Sunday',runs:obj.runs,weights:Array.isArray(obj.weights)?obj.weights:[],weightGoal:obj.weightGoal??null,recent5kBenchmark:obj.recent5kBenchmark||'27:00',adaptive:obj.adaptive&&typeof obj.adaptive==='object'?obj.adaptive:{level:0,proposal:null,lastReview:'',acceptedAt:''}};save();render();alert('Backup restored')}catch(err){alert('Could not import: '+err.message)}e.target.value=''});
+$('importData').addEventListener('change',async e=>{let f=e.target.files[0];if(!f)return;try{let obj=JSON.parse(await f.text());if(!Array.isArray(obj.runs)||typeof obj.start!=='string')throw Error('Invalid backup');if(!confirm('Replace all existing running history with this backup?'))return;data={deletedStravaIds:Array.isArray(obj.deletedStravaIds)?obj.deletedStravaIds:[],start:obj.start,weekend:obj.weekend==='Saturday'?'Saturday':'Sunday',runs:obj.runs,weights:Array.isArray(obj.weights)?obj.weights:[],weightGoal:obj.weightGoal??null,recent5kBenchmark:obj.recent5kBenchmark||'27:00',adaptive:obj.adaptive&&typeof obj.adaptive==='object'?obj.adaptive:{level:0,proposal:null,lastReview:'',acceptedAt:''}};if(!Array.isArray(data.adaptive.sessions)||data.adaptive.sessions.length!==3)data.adaptive.sessions=[12,12,14];save();render();alert('Backup restored')}catch(err){alert('Could not import: '+err.message)}e.target.value=''});
 $('copyCoach').addEventListener('click',async()=>{let summary=`Running Comeback coaching review. Goal sub-50-minute 10K; previous best 55:00; age 57; prior calf/Achilles injury May 2026. Week ${weekIndex()+1}. Schedule Monday, Thursday, weekend (max 3/week). Recommendation: ${advice()}\nApproved training level: ${data.adaptive.level+1}/12. Weekly assessment: ${assessWeek().reason}\nWeight: ${data.weights.length?data.weights[data.weights.length-1].kg+' kg':'not recorded'}; target ${data.weightGoal??'none'} kg.\nRecent runs:\n`+data.runs.slice(-8).map(r=>`${ukDate(r.date)}: ${r.distance}km in ${minutesToHms(r.duration)}; jogging ${r.runningMinutes}min; effort ${r.effort}/10; pain ${r.pain??'not entered'}/10 (${r.location}, ${r.painType}); next morning ${r.morning??'not logged'}/10; notes ${r.notes||'-'}`).join('\n')+'\nPlease assess progress and recommend the next safe training sessions.';try{await navigator.clipboard.writeText(summary);$('copyStatus').textContent='Copied. Paste into your ChatGPT conversation.'}catch(e){download('coaching-summary.txt',summary,'text/plain');$('copyStatus').textContent='Downloaded summary text instead.'}});
-function renderWeights(){const entries=[...data.weights].sort((a,b)=>a.date.localeCompare(b.date));const first=entries[0],last=entries[entries.length-1];$('latestWeight').textContent=last?last.kg.toFixed(1)+' kg':'—';$('weightChange').textContent=first&&last?(last.kg-first.kg>0?'+':'')+(last.kg-first.kg).toFixed(1)+' kg':'—';$('weightGoalDisplay').textContent=data.weightGoal?data.weightGoal.toFixed(1)+' kg':'—';$('weightHistory').innerHTML=entries.length?[...entries].reverse().slice(0,12).map(e=>`<div class="historyitem"><strong>${escapeHTML(e.date)} · ${e.kg.toFixed(1)} kg</strong><button type="button" class="tiny" data-delete-weight="${escapeHTML(e.date)}">Remove</button></div>`).join(''):'<p class="muted">No weight entries yet.</p>';const chart=$('weightChart');if(entries.length<2){chart.innerHTML='<p class="muted">Add at least two measurements to see a trend.</p>';return}const values=entries.slice(-16),lo=Math.min(...values.map(e=>e.kg))-1,hi=Math.max(...values.map(e=>e.kg))+1;const coords=values.map((e,i)=>`${20+i*280/(values.length-1)},${120-(e.kg-lo)/(hi-lo)*100}`).join(' ');chart.innerHTML=`<svg viewBox="0 0 320 145" role="img" aria-label="Weight trend from ${values[0].kg.toFixed(1)} to ${values[values.length-1].kg.toFixed(1)} kilograms"><line x1="20" y1="120" x2="300" y2="120" stroke="#cadbd2"/><polyline points="${coords}" fill="none" stroke="#198364" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((e,i)=>`<circle cx="${20+i*280/(values.length-1)}" cy="${120-(e.kg-lo)/(hi-lo)*100}" r="3" fill="#198364"/>`).join('')}<text x="20" y="140" font-size="10" fill="#506a70">${escapeHTML(values[0].date.slice(5))}</text><text x="260" y="140" font-size="10" fill="#506a70">${escapeHTML(values[values.length-1].date.slice(5))}</text></svg>`;}
+function renderWeights(){const entries=[...data.weights].sort((a,b)=>a.date.localeCompare(b.date));const first=entries[0],last=entries[entries.length-1];$('latestWeight').textContent=last?last.kg.toFixed(1)+' kg':'—';$('weightChange').textContent=first&&last?(last.kg-first.kg>0?'+':'')+(last.kg-first.kg).toFixed(1)+' kg':'—';$('weightGoalDisplay').textContent=data.weightGoal?data.weightGoal.toFixed(1)+' kg':'—';$('weightHistory').innerHTML=entries.length?[...entries].reverse().slice(0,12).map(e=>`<div class="historyitem"><strong>${escapeHTML(ukDate(e.date))} · ${e.kg.toFixed(1)} kg</strong><button type="button" class="tiny" data-delete-weight="${escapeHTML(e.date)}">Remove</button></div>`).join(''):'<p class="muted">No weight entries yet.</p>';const chart=$('weightChart');if(entries.length<2){chart.innerHTML='<p class="muted">Add at least two measurements to see a trend.</p>';return}const values=entries.slice(-16),lo=Math.min(...values.map(e=>e.kg))-1,hi=Math.max(...values.map(e=>e.kg))+1;const coords=values.map((e,i)=>`${20+i*280/(values.length-1)},${120-(e.kg-lo)/(hi-lo)*100}`).join(' ');chart.innerHTML=`<svg viewBox="0 0 320 145" role="img" aria-label="Weight trend from ${values[0].kg.toFixed(1)} to ${values[values.length-1].kg.toFixed(1)} kilograms"><line x1="20" y1="120" x2="300" y2="120" stroke="#cadbd2"/><polyline points="${coords}" fill="none" stroke="#198364" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((e,i)=>`<circle cx="${20+i*280/(values.length-1)}" cy="${120-(e.kg-lo)/(hi-lo)*100}" r="3" fill="#198364"/>`).join('')}<text x="20" y="140" font-size="10" fill="#506a70">${escapeHTML(values[0].date.slice(5))}</text><text x="260" y="140" font-size="10" fill="#506a70">${escapeHTML(values[values.length-1].date.slice(5))}</text></svg>`;}
 $('weightForm').addEventListener('submit',e=>{e.preventDefault();const date=$('weightDate').value,kg=Number($('weightKg').value);if(!date||!Number.isFinite(kg)||kg<25||kg>350)return;data.weights=data.weights.filter(x=>x.date!==date);data.weights.push({date,kg});data.weights.sort((a,b)=>a.date.localeCompare(b.date));save();render();$('weightMessage').textContent='Weight saved. A measurement on the same date is updated rather than duplicated.';$('weightKg').value='';});
 $('weightHistory').addEventListener('click',e=>{const date=e.target.dataset.deleteWeight;if(!date)return;if(!confirm('Remove weight entry for '+date+'?'))return;data.weights=data.weights.filter(x=>x.date!==date);save();render()});
 
@@ -109,7 +121,7 @@ function openActivityEditor(id){
  $('editRunDate').value=r.date||'';
  $('editRunDistance').value=r.distance;
  setTimeCounter('editRunDuration',Math.round(r.duration*60));
- $('editRunRunning').value=r.runningMinutes??r.duration;
+ $('editRunWalking').value=Math.max(0,Math.round((r.duration-(r.runningMinutes??r.duration))*10)/10);showCalculatedRunTime();
  $('editRunEffort').value=r.effort??'';
  $('editRunPain').value=r.pain??'';
  $('editRunMorning').value=r.morning??'';
@@ -126,8 +138,8 @@ $('activityEditor').addEventListener('click',e=>{if(e.target===$('activityEditor
 $('editActivityForm').addEventListener('submit',e=>{
  e.preventDefault();completeActivityTime($('editRunDuration'));
  const r=data.runs.find(x=>String(x.id)===editingRunId);if(!r)return;
- const distance=Number($('editRunDistance').value),duration=hmsToMinutes($('editRunDuration').value),running=Number($('editRunRunning').value);
- if(!$('editRunDate').value||!Number.isFinite(distance)||distance<=0||!Number.isFinite(duration)||duration<=0||!Number.isFinite(running)||running<0||running>duration){alert('Enter a valid date, distance, duration and running time.');return}
+ const distance=Number($('editRunDistance').value),duration=hmsToMinutes($('editRunDuration').value),running=calculatedRunMinutes('editRunDuration','editRunWalking').running;
+ if(!$('editRunDate').value||!Number.isFinite(distance)||distance<=0||!Number.isFinite(duration)||duration<=0||!Number.isFinite(running)||running<0||running>duration){alert('Check the date, distance, total time and walking time. Walking must not exceed total duration.');return}
  const effort=$('editRunEffort').value,pain=$('editRunPain').value,morning=$('editRunMorning').value;
  Object.assign(r,{date:$('editRunDate').value,distance,duration,runningMinutes:running,
  effort:effort===''?null:Number(effort),pain:pain===''?null:Number(pain),morning:morning===''?null:Number(morning),
@@ -152,51 +164,78 @@ $('history').addEventListener('click',e=>{
 // Adaptive coaching: local, rule-based, no network or background scheduler.
 const dayNumber=date=>Math.floor(new Date(date+'T12:00:00').getTime()/86400000);
 const recentComeback=days=>data.runs.filter(r=>r.date>=data.start&&r.date<=today()&&dayNumber(today())-dayNumber(r.date)<days);
+// This engine is deliberately deterministic and explainable, not machine learning.
+// Every progression requires complete recovery feedback and an explicit approval.
 function assessWeek(){
  const runs=recentComeback(7),older=recentComeback(14).filter(r=>dayNumber(today())-dayNumber(r.date)>=7);
- const km=runs.reduce((a,r)=>a+(Number(r.distance)||0),0),oldKm=older.reduce((a,r)=>a+(Number(r.distance)||0),0);
- const missing=runs.filter(r=>r.pain==null||r.effort==null||r.morning==null);
+ const sum=(arr,key)=>arr.reduce((s,r)=>s+(Number(r[key])||0),0);
+ const km=sum(runs,'distance'),oldKm=sum(older,'distance');
+ const running=sum(runs,'runningMinutes'),oldRunning=sum(older,'runningMinutes');
+ const missing=runs.filter(r=>r.pain==null||r.effort==null||r.morning==null||dayNumber(today())<=dayNumber(r.date));
  const high=runs.some(r=>Number(r.pain)>=4||Number(r.morning)>=4||String(r.painType||'').toLowerCase().includes('sharp'));
  const mild=runs.some(r=>Number(r.pain)>0||Number(r.morning)>0||Number(r.effort)>5);
- const tooMany=runs.length>3;
- let type='hold',reason='Not enough recent completed sessions to justify progressing.';
- if(!runs.length)reason='No comeback runs in the last seven days. Keep the current level and restart gently.';
- else if(high){type='recover';reason='Significant pain, stiffness or sharp pain reported. Pause progression and consider assessment by a physiotherapist.';}
- else if(tooMany){type='hold';reason='More than three runs recorded this week. Do not add another session.';}
- else if(missing.length){type='checkin';reason=`${missing.length} run(s) need effort, pain or next-morning recovery feedback before a training increase can be considered.`;}
- else if(mild){type='hold';reason='Symptoms or higher effort reported. Repeat or reduce the current level and monitor recovery.';}
- else if(runs.length<3){type='hold';reason='Fewer than three completed, fully checked-in runs. Consolidate this level first.';}
- else if(oldKm>0&&km>oldKm*1.15){type='hold';reason='Weekly distance already increased substantially compared with the previous week. Consolidate rather than increase again.';}
- else if(data.adaptive.level>=11){type='hold';reason='You are at the final programme level. Maintain consistency rather than progressing automatically.';}
- else{type='progress';reason='Three comfortable runs, complete recovery feedback and no reported symptoms. A modest increase in easy running time may be appropriate.';}
- return {type,reason,runs:runs.length,km,oldKm,missing:missing.length,level:Math.max(0,Math.min(11,data.adaptive.level))};
+ const hrRuns=runs.filter(r=>Number(r.averageHR)>0&&Number(r.distance)>0&&Number(r.duration)>0);
+ const avgHR=hrRuns.length?Math.round(sum(hrRuns,'averageHR')/hrRuns.length):null;
+ const effortRuns=runs.filter(r=>r.effort!=null),avgEffort=effortRuns.length?sum(effortRuns,'effort')/effortRuns.length:null;
+ const lastApproved=data.adaptive.sessions||[12,12,14];
+ const currentTotal=lastApproved.reduce((a,b)=>a+b,0);
+ let type='hold',reason='Insufficient completed sessions for an increase.';
+ if(!runs.length)reason='No comeback runs in the last seven days. Keep the existing easy sessions.';
+ else if(high){type='recover';reason='Pain or next-morning stiffness at least 4/10, or sharp pain. Do not progress; consider clinical assessment.';}
+ else if(runs.length>3){reason='More than three runs in the last seven days. Do not add another.';}
+ else if(missing.length){type='checkin';reason=`${missing.length} activity check-in(s) incomplete or too early for a next-morning assessment.`;}
+ else if(mild){reason='Symptoms or effort above 5/10. Hold or reduce the workload and reassess.';}
+ else if(runs.length<3){reason='Complete three comfortable sessions before considering an increase.';}
+ else if(oldRunning>0&&running>oldRunning*1.10){reason='Running time has already increased by more than 10% compared with the previous seven days.';}
+ else if(oldKm>0&&km>oldKm*1.15){reason='Distance has already risen more than 15% compared with the previous seven days.';}
+ else if(running<currentTotal*.75){reason='Recorded running time is well below the approved plan. Consolidate before increasing.';}
+ else{type='progress';reason='Three easy runs with complete next-morning checks and no reported symptoms. A small increase in running minutes is available for approval.';}
+ const maxTotal=Math.floor(currentTotal*1.10);
+ const increment=Math.min(2,Math.max(0,maxTotal-currentTotal));
+ // Adjust the shortest session first; increase total running time by no more than 10%.
+ const suggested=[...lastApproved];
+ if(increment>0){let idx=suggested.indexOf(Math.min(...suggested));suggested[idx]+=increment;}
+ if(type==='progress'&&increment===0){type='hold';reason='The next increase would exceed the current 10% weekly limit; repeat this level.';}
+ return {type,reason,runs:runs.length,km,oldKm,running,oldRunning,missing:missing.length,level:Math.max(0,Math.min(11,data.adaptive.level)),suggested,avgHR,avgEffort,currentTotal};
+}
+function coachingSignature(){return JSON.stringify({start:data.start,runs:recentComeback(14).map(r=>[r.id,r.date,r.duration,r.runningMinutes,r.distance,r.effort,r.pain,r.morning,r.painType]),sessions:data.adaptive.sessions});}
+function explainEngine(a){
+ const hr=a.avgHR==null?'No comparable heart-rate trend available.':'Recent average HR '+a.avgHR+' bpm (context only; no pace targets inferred).';
+ return `Training load: ${a.running.toFixed(1)} running min and ${a.km.toFixed(1)} km in seven days; previous seven days ${a.oldRunning.toFixed(1)} min and ${a.oldKm.toFixed(1)} km.\nFitness: average perceived effort ${a.avgEffort==null?'not recorded':a.avgEffort.toFixed(1)+'/10'}. ${hr}\nRecovery: ${a.missing} incomplete next-morning check(s).\nDecision: ${a.reason}\nSafety: maximum three sessions weekly, no automatic speed work, increases require your approval.`;
 }
 function renderAdaptive(){
- const a=assessWeek(),proposal=data.adaptive.proposal;
- $('adaptiveSummary').textContent=`Last 7 days: ${a.runs} run(s), ${a.km.toFixed(1)} km. Current approved level: ${a.level+1} / 12.`;
- $('activePlanNote').textContent=`Approved training level: ${a.level+1} / 12 (${weeks[a.level][0]}). Calendar week ${weekIndex()+1} / 12 is for reference only; progression needs your approval.`;
- $('adaptiveProposal').textContent=proposal?`${proposal.label}: ${proposal.reason}`:'Press Review my week to generate a recommendation. No automatic training increases.';
- $('adaptiveProposal').className='notice'+(proposal&&proposal.type==='recover'?' warn':'');
- $('acceptPlan').disabled=!(proposal&&proposal.type==='progress'&&proposal.target>data.adaptive.level&&proposal.reviewDate===today()&&assessWeek().type==='progress');
+ const a=assessWeek(),p=data.adaptive.proposal;
+ $('adaptiveSummary').textContent=`Last 7 days: ${a.runs} runs · ${a.running.toFixed(1)} running min · ${a.km.toFixed(1)} km. Approved weekly running: ${a.currentTotal} min.`;
+ $('activePlanNote').textContent=`Your approved three-session plan totals ${a.currentTotal} minutes running per week. Review your training and recovery before accepting changes. Calendar week ${weekIndex()+1} is reference only.`;
+ $('adaptiveProposal').textContent=p?`${p.label}: ${p.reason}`:'Press Review my week to calculate a new recommendation. Your current sessions remain unchanged until you approve.';
+ $('adaptiveProposal').className='notice'+(p&&p.type==='recover'?' warn':'');
+ $('enginePlan').textContent=p&&p.type==='progress'?`Proposed: Mon ${p.sessions[0]} min · Thu ${p.sessions[1]} min · ${data.weekend} ${p.sessions[2]} min easy running (currently ${data.adaptive.sessions.join(' / ')} min).`:`Approved: Mon ${data.adaptive.sessions[0]} min · Thu ${data.adaptive.sessions[1]} min · ${data.weekend} ${data.adaptive.sessions[2]} min easy running.`;
+ $('engineWhy').textContent=explainEngine(a);
+ $('acceptPlan').disabled=!(p&&p.type==='progress'&&p.reviewDate===today()&&p.signature===coachingSignature()&&a.type==='progress');
  const latest=recentComeback(14).slice(-1)[0];
- if(latest&&latest.morning==null){$('morningStatus').textContent=`Recovery check-in still needed for ${ukDate(latest.date)}. Only record it the morning after that run.`;}
- if(new Date().getDay()===0&&data.adaptive.lastReview!==today())$('adaptiveStatus').textContent='Sunday review available. Tap Review my week to see the recommendation.';
+ $('morningStatus').textContent=latest&&latest.morning==null?`Recovery check-in needed for ${ukDate(latest.date)}. Record only the next morning.`:'';
+ if(new Date().getDay()===0&&data.adaptive.lastReview!==today())$('adaptiveStatus').textContent='Sunday review available. Tap Review my week to see your recommendation.';
 }
 $('reviewWeek').addEventListener('click',()=>{
- const a=assessWeek();let label={progress:'PROPOSE: progress one level',hold:'MAINTAIN: keep current level',recover:'RECOVER: pause progression',checkin:'CHECK-IN NEEDED: no increase'}[a.type];
- data.adaptive.proposal={type:a.type,target:a.type==='progress'?Math.min(11,a.level+1):a.level,reason:a.reason,label,reviewDate:today()};
- data.adaptive.lastReview=today();save();render();$('adaptiveStatus').textContent='Review complete. A progression is only applied if you approve it.';
+ const a=assessWeek();
+ const label={progress:'PROPOSE: small increase',hold:'MAINTAIN: repeat current sessions',recover:'RECOVER: pause progression',checkin:'CHECK-IN NEEDED'}[a.type];
+ data.adaptive.proposal={type:a.type,sessions:a.suggested,reason:a.reason,label,reviewDate:today(),signature:coachingSignature()};
+ data.adaptive.lastReview=today();save();render();$('adaptiveStatus').textContent='Review complete. Any increase requires your approval.';
 });
 $('acceptPlan').addEventListener('click',()=>{
  const a=assessWeek(),p=data.adaptive.proposal;
- if(!p||p.type!=='progress'||a.type!=='progress'||p.target!==a.level+1||p.reviewDate!==today())return;
- if(!confirm(`Approve level ${p.target+1}: ${weeks[p.target][0]}? Continue only if recovery remains comfortable.`))return;
- data.adaptive.level=p.target;data.adaptive.acceptedAt=today();data.adaptive.proposal=null;save();render();$('adaptiveStatus').textContent='New level approved. Keep running easy and monitor next-morning symptoms.';
+ if(!p||p.type!=='progress'||a.type!=='progress'||p.reviewDate!==today()||p.signature!==coachingSignature()){
+  alert('Your training or recovery information has changed. Review the week again.');return;
+ }
+ if(!confirm(`Approve next week: ${p.sessions.join(' / ')} running minutes on your three running days?`))return;
+ data.adaptive.sessions=[...p.sessions];data.adaptive.level=Math.min(11,data.adaptive.level+1);
+ data.adaptive.acceptedAt=today();data.adaptive.proposal=null;save();render();
+ $('adaptiveStatus').textContent='New easy-running durations approved. Check your symptoms the following morning.';
 });
-$('keepPlan').addEventListener('click',()=>{data.adaptive.proposal=null;data.adaptive.lastReview=today();save();render();$('adaptiveStatus').textContent='Current level retained. You can review again whenever needed.';});
+$('keepPlan').addEventListener('click',()=>{data.adaptive.proposal=null;data.adaptive.lastReview=today();save();render();$('adaptiveStatus').textContent='Current sessions retained.';});
 
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-render();
+render();showCalculatedRunTime();
 
 // Live Strava integration (v4). Private key is entered on device, never shipped in source.
 const STRAVA_API='https://running-comeback-strava.drwhobe12.workers.dev';
