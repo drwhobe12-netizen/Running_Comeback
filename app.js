@@ -41,8 +41,36 @@ function completeActivityTime(input){
  if(digits.length<=4){const padded=digits.padStart(4,'0');input.value='00:'+padded.slice(0,2)+':'+padded.slice(2)}
  else if(digits.length<=6){const padded=digits.padStart(6,'0');input.value=padded.slice(0,2)+':'+padded.slice(2,4)+':'+padded.slice(4)}
 }
+// Separate counters avoid ambiguous digit-entry and work for sub-minute activities.
+function setTimeCounter(id, totalSeconds){
+ let s=Math.max(0,Math.min(3599999,Math.round(Number(totalSeconds)||0)));
+ const vals=[Math.floor(s/3600),Math.floor(s%3600/60),s%60];
+ ['hh','mm','ss'].forEach((u,i)=>$(id+'_'+u).value=String(vals[i]));
+ updateTimeCounter(id);
+}
+function updateTimeCounter(id){
+ const values=['hh','mm','ss'].map((u,i)=>{
+  const el=$(id+'_'+u);let n=Math.floor(Number(el.value));if(!Number.isFinite(n))n=0;
+  return Math.max(0,Math.min(i===0?999:59,n));
+ });
+ const val=values.map((v,i)=>String(v).padStart(i===0?2:2,'0')).join(':');
+ $(id).value=val;$(id+'_preview').textContent=val;
+}
 for(const id of ['duration','editRunDuration']){
- const input=$(id);input.addEventListener('input',()=>maskActivityTime(input));input.addEventListener('blur',()=>completeActivityTime(input));
+ const box=document.querySelector('[data-time-for="'+id+'"]');
+ box.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-step]');if(!b)return;
+  const el=$(id+'_'+b.dataset.step);const max=b.dataset.step==='hh'?999:59;
+  const next=Number(el.value||0)+Number(b.dataset.delta);
+  el.value=String(Math.max(0,Math.min(max,next)));updateTimeCounter(id);
+ });
+ box.addEventListener('input',()=>updateTimeCounter(id));
+ box.addEventListener('change',()=>{
+  for(const u of ['hh','mm','ss']){
+   const el=$(id+'_'+u);el.value=String(Math.max(0,Math.min(u==='hh'?999:59,Math.floor(Number(el.value)||0))));
+  }updateTimeCounter(id);
+ });
+ updateTimeCounter(id);
 }
 const minutesToHms=value=>{const seconds=Math.round(Number(value)*60);if(!Number.isFinite(seconds)||seconds<0)return '00:00:00';return `${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`};
 const fmtPace=r=>r.distance>0?(()=>{let n=r.duration/r.distance;return `${Math.floor(Math.round(n*60)/60)}:${String(Math.round(n*60)%60).padStart(2,'0')}/km`})():'—';
@@ -53,7 +81,7 @@ $('historyFilter').addEventListener('change',render);
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 ['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('input',()=>$(id+'Value').textContent=$(id).value));
 $('runDate').value=today();$('weightDate').value=today();
-$('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:Number($('runningMinutes').value),effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes>r.duration){alert('Please enter a valid date, distance, total time and running time.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
+$('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:Number($('runningMinutes').value),effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes>r.duration){alert('Please enter a valid date, distance, total time and running time.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();setTimeCounter('duration',0);$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
 $('saveMorning').addEventListener('click',()=>{const current=data.runs.filter(r=>r.date>=data.start&&r.date<=today());if(!current.length){$('morningStatus').textContent='Log a comeback run first.';return}let r=current[current.length-1];if(r.date===today()){ $('morningStatus').textContent='Please complete this check-in tomorrow morning, not immediately after your run.';return;}r.morning=Number($('morningPain').value);save();render();$('morningStatus').textContent=`Saved for your latest run (${r.date}).`});
 $('saveSettings').addEventListener('click',()=>{if(!$('startDate').value)return;data.start=$('startDate').value;data.weekend=$('weekend').value;const benchmark=$('recent5kSetting').value.trim();if(!/^\d{1,2}:[0-5]\d$/.test(benchmark)){alert('Enter a valid 5K benchmark, for example 27:00.');return;}data.recent5kBenchmark=benchmark;data.weightGoal=$('weightGoal').value?Number($('weightGoal').value):null;save();render();alert('Settings saved')});
 function download(name,body,mime){const blob=new Blob([body],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -80,7 +108,7 @@ function openActivityEditor(id){
  $('editRunSource').textContent=r.stravaId?'Imported from Strava · changes are local to this app':'Manually logged activity';
  $('editRunDate').value=r.date||'';
  $('editRunDistance').value=r.distance;
- $('editRunDuration').value=minutesToHms(r.duration);
+ setTimeCounter('editRunDuration',Math.round(r.duration*60));
  $('editRunRunning').value=r.runningMinutes??r.duration;
  $('editRunEffort').value=r.effort??'';
  $('editRunPain').value=r.pain??'';
