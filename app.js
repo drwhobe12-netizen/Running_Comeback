@@ -86,7 +86,7 @@ function showCalculatedRunTime(){
 }
 for(const el of document.querySelectorAll('.time-stepper'))el.addEventListener('input',showCalculatedRunTime);
 for(const el of document.querySelectorAll('.time-stepper button'))el.addEventListener('click',()=>setTimeout(showCalculatedRunTime,0));
-for(const id of ['walkingMinutes','editRunWalking'])$(id).addEventListener('input',showCalculatedRunTime);
+for(const id of ['walkingMinutes','editRunWalking'])$(id).addEventListener('change',showCalculatedRunTime);
 const fmtPace=r=>r.distance>0?(()=>{let n=r.duration/r.distance;return `${Math.floor(Math.round(n*60)/60)}:${String(Math.round(n*60)%60).padStart(2,'0')}/km`})():'—';
 // Explicit run/walk schedule: prescribed minutes are RUNNING only.
 function sessionSteps(runMinutes){
@@ -235,9 +235,9 @@ function renderStrength(){
  const previous=new Set([...list.querySelectorAll('input[data-strength-id]:checked')].map(x=>x.dataset.strengthId));
  list.innerHTML=strengthExercises.map(x=>`<div class="strength-exercise"><input type="checkbox" aria-label="Completed ${escapeHTML(x.title)}" data-strength-id="${x.id}" ${previous.has(x.id)?'checked':''}><button class="strength-photo-button" type="button" data-enlarge-exercise="${x.id}" aria-label="Enlarge picture: ${escapeHTML(x.title)}"><img class="strength-photo" src="exercise-${x.id}.webp" alt="Illustration demonstrating ${escapeHTML(x.title)}" loading="lazy"><span class="strength-zoom-hint">Tap to enlarge</span></button><span class="strength-copy"><strong>${escapeHTML(x.title)}</strong><small>${escapeHTML(x.group)} · ${escapeHTML(x.dose)}</small><span>${escapeHTML(x.how)}</span><em>${escapeHTML(x.tip)}</em></span></div>`).join('');
  const pending=[...data.strengthSessions].reverse().find(x=>x.morning==null);
- $('strengthMorningPending').innerHTML=pending?`<p>Session ${ukDate(pending.date)} · ${pending.exercises.length} exercises</p><label>Next-morning pain / stiffness (0–10)<input id="strengthMorningValue" type="range" min="0" max="10" value="0"><output id="strengthMorningOutput">0</output></label><button class="secondary" id="saveStrengthMorning" type="button">Save check-in</button>`:'<p class="muted">No exercise session awaiting a morning check-in.</p>';
+ $('strengthMorningPending').innerHTML=pending?`<p>Session ${ukDate(pending.date)} · ${pending.exercises.length} exercises</p><label>Next-morning pain / stiffness (0–10)<select id="strengthMorningValue"><option value="0">0 / 10</option><option value="1">1 / 10</option><option value="2">2 / 10</option><option value="3">3 / 10</option><option value="4">4 / 10</option><option value="5">5 / 10</option><option value="6">6 / 10</option><option value="7">7 / 10</option><option value="8">8 / 10</option><option value="9">9 / 10</option><option value="10">10 / 10</option></select><output id="strengthMorningOutput">0</output></label><button class="secondary" id="saveStrengthMorning" type="button">Save check-in</button>`:'<p class="muted">No exercise session awaiting a morning check-in.</p>';
  if(pending){
-  $('strengthMorningValue').addEventListener('input',()=>{$('strengthMorningOutput').textContent=$('strengthMorningValue').value});
+  $('strengthMorningValue').addEventListener('change',()=>{$('strengthMorningOutput').textContent=$('strengthMorningValue').value});
   $('saveStrengthMorning').addEventListener('click',()=>{
    if(today()<=pending.date&&!confirm('This session was recorded today. Save a same-day check-in instead of waiting until tomorrow?'))return;
    pending.morning=Number($('strengthMorningValue').value);save();renderStrength();
@@ -245,7 +245,7 @@ function renderStrength(){
  }
  $('strengthHistory').innerHTML=data.strengthSessions.length?[...data.strengthSessions].reverse().slice(0,15).map(x=>`<div class="historyitem"><strong>${ukDate(x.date)} · ${x.exercises.length} exercises</strong><span>Discomfort ${x.pain}/10 · Next morning ${x.morning==null?'pending':x.morning+'/10'}</span><div>${escapeHTML(x.exercises.map(id=>strengthExercises.find(e=>e.id===id)?.title||id).join(', '))}</div>${x.notes?`<div>${escapeHTML(x.notes)}</div>`:''}</div>`).join(''):'<p class="muted">No exercise sessions logged yet.</p>';
 }
-$('strengthPain').addEventListener('input',()=>{$('strengthPainValue').textContent=$('strengthPain').value});
+$('strengthPain').addEventListener('change',()=>{$('strengthPainValue').textContent=$('strengthPain').value});
 $('saveStrength').addEventListener('click',()=>{
  const exercises=[...document.querySelectorAll('input[data-strength-id]:checked')].map(x=>x.dataset.strengthId);
  if(!exercises.length){$('strengthStatus').textContent='Select at least one completed exercise.';return}
@@ -264,7 +264,7 @@ const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 function go(page){document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id===page));document.querySelectorAll('nav button').forEach(el=>el.classList.toggle('selected',el.dataset.go===page));window.scrollTo(0,0)}
 $('historyFilter').addEventListener('change',render);
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
-['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('input',()=>$(id+'Value').textContent=$(id).value));
+['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('change',()=>$(id+'Value').textContent=$(id).value));
 $('runDate').value=today();$('weightDate').value=today();$('morningDate').value=today();
 $('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:calculatedRunMinutes('duration','walkingMinutes').running,effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,immediateNotes:$('immediateNotes').value,morningNotes:'',morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes<0||r.runningMinutes>r.duration){alert('Check total time and walking time: walking cannot exceed the activity duration.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();setTimeCounter('duration',0);showCalculatedRunTime();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
 function morningTargetRun(){

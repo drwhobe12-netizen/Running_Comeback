@@ -1,0 +1,5 @@
+Running Comeback v7.8.0
+
+Pain/effort sliders replaced by 0–10 dropdowns on run, morning and strength forms.
+IMPORTANT: This update does NOT add cross-device synchronisation. The app uses localStorage, so phone and desktop assessments remain separate. Strava sync only imports runs. Back up each device before importing data.
+Same localStorage key and existing records retained.
