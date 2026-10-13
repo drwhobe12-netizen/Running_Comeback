@@ -68,3 +68,7 @@ nav button span{font-size:9px}
 .strength-zoom-close{display:block;margin-left:auto;padding:10px 14px;border:1px solid #b8ccc7;border-radius:9px;background:#e8f3ef;color:#123b36;font-weight:700;cursor:pointer}
 .strength-zoom-dose{font-weight:700;color:#19624d}
 body.strength-zoom-open{overflow:hidden}
+
+/* v7.6: readable multi-line feedback on mobile */
+#immediateNotes,#morningNotes,#dailyNotes,#editRunLocation,#editRunImmediate,#editRunMorningNotes,#editRunNotes,#notes,#strengthNotes{display:block;box-sizing:border-box;width:100%;min-height:140px;line-height:1.5;font-size:16px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;resize:vertical;}
+#dailyHistory .historyitem{white-space:normal;overflow-wrap:anywhere;line-height:1.5;}

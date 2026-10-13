@@ -1,0 +1,1 @@
+v7.6.0: Separate immediate and next-day run notes, enlarged wrapping text boxes, daily bilateral calf/Achilles assessments, injury background, verified 101.6 kg reading on 13 October 2026. Same localStorage key as v7.5; import/export retains new fields. Back up before deployment. No automatic Health Connect weight integration.
