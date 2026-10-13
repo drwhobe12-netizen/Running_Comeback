@@ -1,0 +1,1 @@
+Running Comeback v7.7.0 — dated check-ins. Morning check-in now has its own editable assessment date and shows the run it links to; saved morning entries include morningDate. The run date is explicitly labelled as the run/immediate feedback date. Existing browser storage is preserved.

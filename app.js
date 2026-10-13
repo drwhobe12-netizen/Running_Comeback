@@ -265,9 +265,30 @@ function go(page){document.querySelectorAll('.page').forEach(el=>el.classList.to
 $('historyFilter').addEventListener('change',render);
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 ['effort','pain','morningPain'].forEach(id=>$(id).addEventListener('input',()=>$(id+'Value').textContent=$(id).value));
-$('runDate').value=today();$('weightDate').value=today();
+$('runDate').value=today();$('weightDate').value=today();$('morningDate').value=today();
 $('runForm').addEventListener('submit',e=>{e.preventDefault();completeActivityTime($('duration'));let r={id:Date.now(),date:$('runDate').value,session:$('session').value,distance:Number($('distance').value),duration:hmsToMinutes($('duration').value),runningMinutes:calculatedRunMinutes('duration','walkingMinutes').running,effort:Number($('effort').value),pain:Number($('pain').value),location:$('location').value,painType:$('painType').value,notes:$('notes').value,immediateNotes:$('immediateNotes').value,morningNotes:'',morning:null};if(!r.date||r.distance<=0||!Number.isFinite(r.duration)||r.duration<=0||r.runningMinutes<0||r.runningMinutes>r.duration){alert('Check total time and walking time: walking cannot exceed the activity duration.');return}data.runs.push(r);data.runs.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);save();render();$('savedNotice').classList.remove('hidden');$('savedNotice').textContent='Run saved. '+advice();$('runForm').reset();setTimeCounter('duration',0);showCalculatedRunTime();$('runDate').value=today();$('effortValue').textContent='3';$('painValue').textContent='0';go('home')});
-$('saveMorning').addEventListener('click',()=>{const current=data.runs.filter(r=>r.date>=data.start&&r.date<=today());if(!current.length){$('morningStatus').textContent='Log a comeback run first.';return}let r=current[current.length-1];if(r.date===today()){ $('morningStatus').textContent='Please complete this check-in tomorrow morning, not immediately after your run.';return;}r.morning=Number($('morningPain').value);r.morningNotes=$('morningNotes').value;save();render();$('morningStatus').textContent=`Saved for your latest run (${r.date}).`});
+function morningTargetRun(){
+ const date=$('morningDate').value;
+ if(!date)return null;
+ const eligible=data.runs.filter(r=>r.date>=data.start&&r.date<date).sort((a,b)=>b.date.localeCompare(a.date)||Number(b.id)-Number(a.id));
+ return eligible[0]||null;
+}
+function updateMorningLink(){
+ const r=morningTargetRun();
+ $('morningLinkedRun').textContent=r?`Assessment ${ukDate($('morningDate').value)} · linked to run on ${ukDate(r.date)} (${Number(r.distance).toFixed(2)} km)`:'No earlier comeback run available for this assessment date. You can use the separate daily assessment instead.';
+}
+$('morningDate').addEventListener('change',()=>{updateMorningLink();$('morningStatus').textContent='';});
+$('saveMorning').addEventListener('click',()=>{
+ const date=$('morningDate').value,r=morningTargetRun();
+ if(!date){$('morningStatus').textContent='Choose the date of your morning assessment.';return;}
+ if(!r){$('morningStatus').textContent='No earlier comeback run found. Use the daily assessment for a rest day.';return;}
+ r.morning=Number($('morningPain').value);
+ r.morningNotes=$('morningNotes').value;
+ r.morningDate=date;
+ save();render();updateMorningLink();
+ $('morningStatus').textContent=`Saved ${ukDate(date)} assessment for run on ${ukDate(r.date)}.`;
+});
+
 $('saveSettings').addEventListener('click',()=>{if(!$('startDate').value)return;data.start=$('startDate').value;data.weekend=$('weekend').value;const benchmark=$('recent5kSetting').value.trim();if(!/^\d{1,2}:[0-5]\d$/.test(benchmark)){alert('Enter a valid 5K benchmark, for example 27:00.');return;}data.recent5kBenchmark=benchmark;data.weightGoal=$('weightGoal').value?Number($('weightGoal').value):null;save();render();alert('Settings saved')});
 function download(name,body,mime){const blob=new Blob([body],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('exportData').addEventListener('click',()=>download('running-comeback-backup-'+today()+'.json',JSON.stringify(data,null,2),'application/json'));
@@ -276,7 +297,7 @@ $('copyCoach').addEventListener('click',async()=>{let summary=`Running Comeback 
 function renderWeights(){const entries=[...data.weights].sort((a,b)=>a.date.localeCompare(b.date));const first=entries[0],last=entries[entries.length-1];$('latestWeight').textContent=last?last.kg.toFixed(1)+' kg':'—';$('weightChange').textContent=first&&last?(last.kg-first.kg>0?'+':'')+(last.kg-first.kg).toFixed(1)+' kg':'—';$('weightGoalDisplay').textContent=data.weightGoal?data.weightGoal.toFixed(1)+' kg':'—';$('weightHistory').innerHTML=entries.length?[...entries].reverse().slice(0,12).map(e=>`<div class="historyitem"><strong>${escapeHTML(ukDate(e.date))} · ${e.kg.toFixed(1)} kg</strong><button type="button" class="tiny" data-delete-weight="${escapeHTML(e.date)}">Remove</button></div>`).join(''):'<p class="muted">No weight entries yet.</p>';const chart=$('weightChart');if(entries.length<2){chart.innerHTML='<p class="muted">Add at least two measurements to see a trend.</p>';return}const values=entries.slice(-16),lo=Math.min(...values.map(e=>e.kg))-1,hi=Math.max(...values.map(e=>e.kg))+1;const coords=values.map((e,i)=>`${20+i*280/(values.length-1)},${120-(e.kg-lo)/(hi-lo)*100}`).join(' ');chart.innerHTML=`<svg viewBox="0 0 320 145" role="img" aria-label="Weight trend from ${values[0].kg.toFixed(1)} to ${values[values.length-1].kg.toFixed(1)} kilograms"><line x1="20" y1="120" x2="300" y2="120" stroke="#cadbd2"/><polyline points="${coords}" fill="none" stroke="#198364" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((e,i)=>`<circle cx="${20+i*280/(values.length-1)}" cy="${120-(e.kg-lo)/(hi-lo)*100}" r="3" fill="#198364"/>`).join('')}<text x="20" y="140" font-size="10" fill="#506a70">${escapeHTML(values[0].date.slice(5))}</text><text x="260" y="140" font-size="10" fill="#506a70">${escapeHTML(values[values.length-1].date.slice(5))}</text></svg>`;}
 
 // v7.6: independent daily symptom records, compatible with older backups.
-$('dailyDate').value=today();
+$('dailyDate').value=today();updateMorningLink();
 function renderDailyHistory(){
  const entries=[...(data.dailyAssessments||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);
  $('dailyHistory').innerHTML=entries.map(x=>`<div class="historyitem"><strong>${escapeHTML(ukDate(x.date))}</strong> · Right ${x.right}/10 · Left ${x.left}/10<br>${escapeHTML(x.notes||'No additional notes')}</div>`).join('')||'<p class="muted">No daily assessments yet.</p>';
