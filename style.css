@@ -75,3 +75,10 @@ body.strength-zoom-open{overflow:hidden}
 
 /* v7.9 Nutrition */
 nav{grid-template-columns:repeat(7,minmax(0,1fr))}nav button{font-size:19px}nav button span{font-size:8px}#nutrition .nut-recipe{border:1px solid #dce8e2;border-radius:12px;padding:13px;margin:10px 0;background:#f9fcfa}#nutrition .nut-recipe h4{margin:0 0 6px}#nutrition .nut-recipe p{margin:6px 0}#nutrition .nut-rating{display:flex;gap:3px;flex-wrap:wrap;margin-top:8px}#nutrition .nut-rating button{border:1px solid #c7d9cf;border-radius:8px;background:#fff;padding:7px 9px;color:#176b54}#nutrition .nut-rating button.active{background:#d4f3df}#nutrition .nut-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}#nutrition .nut-summary .tile strong{font-size:16px}#nutrition .nut-shop-row{padding:6px 0;border-bottom:1px solid #edf2ef;font-size:13px}#nutrition .nut-actions{display:flex;gap:8px}#nutrition .nut-actions button{flex:1}#nutrition .nut-day{font-weight:700;color:#175742}#nutrition .nut-ingredients{font-size:12px;color:#516c6b}#nutrition .nut-status{font-size:12px;color:#5b7671}
+
+/* v7.10 inline activity editing and coaching exchange */
+.run-description-link{display:block;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:9px 2px;cursor:pointer;font:inherit;line-height:1.45;border-bottom:1px dashed currentColor;overflow-wrap:anywhere}
+.run-description-link:hover,.run-description-link:focus-visible{color:#198364;text-decoration:underline}
+.coach-exchange textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px}
+#coachImportPreview{white-space:pre-line;overflow-wrap:anywhere}
+[hidden]{display:none!important}
